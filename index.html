@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0A1628">
+<meta name="description" content="Fleet/HECP/SECP Tracker - PWA">
+<title>Fleet/HECP/SECP Tracker</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='24' fill='%230A1628'/><rect x='24' y='24' width='144' height='144' rx='16' fill='%2300D2B9'/><text x='96' y='125' text-anchor='middle' font-family='monospace' font-weight='700' font-size='60' fill='%23060E1C'>FCT</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep:    #060E1C;
+    --bg-base:    #0A1628;
+    --bg-card:    #0F1F38;
+    --bg-hover:   #162845;
+    --bg-input:   #0D1A30;
+    --accent:     #00D2B9;
+    --accent-dim: #00A896;
+    --accent-glow:#00D2B920;
+    --warn:       #F59E0B;
+    --danger:     #EF4444;
+    --success:    #22C55E;
+    --text-pri:   #E8F4F8;
+    --text-sec:   #8BAFC8;
+    --text-dim:   #4A6580;
+    --border:     #1A2E48;
+    --border-lit: #253D5C;
+    --radius:     8px;
+    --radius-lg:  12px;
+    --mono:       'JetBrains Mono', monospace;
+    --sans:       'Inter', sans-serif;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{font-size:14px;scroll-behavior:smooth}
+  body{font-family:var(--sans);background:var(--bg-deep);color:var(--text-pri);min-height:100vh;line-height:1.5}
+
+  /* ── Layout ── */
+  #app{display:flex;flex-direction:column;min-height:100vh}
+  .page{display:none;flex-direction:column;min-height:100vh}
+  .page.active{display:flex}
+
+  /* ── Login ── */
+  .login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;
+    background:radial-gradient(ellipse 80% 60% at 50% 0%,#00D2B912 0%,transparent 70%),var(--bg-deep)}
+  .login-box{width:100%;max-width:400px;padding:2.5rem;background:var(--bg-card);
+    border:1px solid var(--border-lit);border-radius:var(--radius-lg);box-shadow:0 0 60px #00D2B908}
+  .login-logo{display:flex;align-items:center;gap:.75rem;margin-bottom:2rem}
+  .login-logo .mark{width:40px;height:40px;background:var(--accent);border-radius:8px;
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);
+    font-weight:600;font-size:1.2rem;color:#060E1C}
+  .login-logo .brand{font-size:1.1rem;font-weight:600;color:var(--text-pri);line-height:1.2}
+  .login-logo .brand span{display:block;font-size:.75rem;font-weight:400;color:var(--text-sec)}
+  .login-title{font-size:1.35rem;font-weight:600;margin-bottom:.4rem}
+  .login-sub{font-size:.85rem;color:var(--text-sec);margin-bottom:1.75rem}
+  .field{margin-bottom:1.1rem}
+  .field label{display:block;font-size:.78rem;font-weight:500;color:var(--text-sec);
+    text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem}
+  .field input,.field select{width:100%;padding:.65rem .9rem;background:var(--bg-input);
+    border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);
+    font-family:var(--sans);font-size:.9rem;outline:none;transition:border-color .2s}
+  .field input:focus,.field select:focus{border-color:var(--accent)}
+  .field select option{background:var(--bg-card)}
+  .btn-primary{width:100%;padding:.75rem;background:var(--accent);border:none;
+    border-radius:var(--radius);color:#060E1C;font-weight:700;font-size:.95rem;
+    cursor:pointer;font-family:var(--sans);transition:all .2s;letter-spacing:.01em}
+  .btn-primary:hover{background:var(--accent-dim);box-shadow:0 0 20px #00D2B940}
+
+  /* ── Top Bar ── */
+  .topbar{display:flex;align-items:center;justify-content:space-between;
+    padding:.85rem 1.5rem;background:var(--bg-card);border-bottom:1px solid var(--border);
+    position:sticky;top:0;z-index:100;backdrop-filter:blur(10px)}
+  .topbar-left{display:flex;align-items:center;gap:1rem}
+  .topbar-mark{width:32px;height:32px;background:var(--accent);border-radius:6px;
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);
+    font-weight:700;font-size:.9rem;color:#060E1C;flex-shrink:0}
+  .topbar-brand{font-size:.95rem;font-weight:600}
+  .topbar-brand span{font-size:.72rem;font-weight:400;color:var(--text-sec);margin-left:.4rem}
+  .topbar-right{display:flex;align-items:center;gap:.75rem}
+  .role-badge{padding:.25rem .7rem;border-radius:20px;font-size:.72rem;font-weight:600;
+    text-transform:uppercase;letter-spacing:.08em;font-family:var(--mono)}
+  .role-badge.superadmin{background:#00D2B920;color:var(--accent);border:1px solid #00D2B940}
+  .role-badge.admin{background:#F59E0B20;color:var(--warn);border:1px solid #F59E0B40}
+  .role-badge.viewer{background:#8B5CF620;color:#A78BFA;border:1px solid #8B5CF640}
+  .topbar-user{font-size:.82rem;color:var(--text-sec)}
+  .btn-logout{padding:.35rem .8rem;background:transparent;border:1px solid var(--border);
+    border-radius:var(--radius);color:var(--text-sec);font-size:.78rem;cursor:pointer;
+    font-family:var(--sans);transition:all .2s}
+  .btn-logout:hover{border-color:var(--danger);color:var(--danger)}
+
+  /* ── Main layout ── */
+  .main-wrap{display:flex;flex:1;min-height:0}
+  .sidebar{width:220px;background:var(--bg-card);border-right:1px solid var(--border);
+    padding:1.25rem .75rem;display:flex;flex-direction:column;gap:.25rem;flex-shrink:0}
+  .nav-item{display:flex;align-items:center;gap:.65rem;padding:.6rem .85rem;
+    border-radius:var(--radius);cursor:pointer;color:var(--text-sec);font-size:.85rem;
+    font-weight:500;transition:all .2s;border:1px solid transparent}
+  .nav-item:hover{background:var(--bg-hover);color:var(--text-pri)}
+  .nav-item.active{background:var(--accent-glow);color:var(--accent);border-color:#00D2B930}
+  .nav-icon{font-size:1rem;width:18px;text-align:center}
+  .nav-section{font-size:.68rem;font-weight:600;color:var(--text-dim);
+    text-transform:uppercase;letter-spacing:.1em;padding:.85rem .85rem .3rem;margin-top:.5rem}
+  .content{flex:1;overflow-y:auto;padding:1.5rem}
+
+  /* ── Panels ── */
+  .panel{display:none}
+  .panel.active{display:block}
+  .panel-title{font-size:1.2rem;font-weight:700;margin-bottom:.3rem}
+  .panel-sub{font-size:.82rem;color:var(--text-sec);margin-bottom:1.5rem}
+
+  /* ── Dashboard ── */
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem}
+  .stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);
+    padding:1.25rem;position:relative;overflow:hidden;transition:border-color .2s}
+  .stat-card:hover{border-color:var(--border-lit)}
+  .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+  .stat-card.cyan::before{background:var(--accent)}
+  .stat-card.warn::before{background:var(--warn)}
+  .stat-card.success::before{background:var(--success)}
+  .stat-card.purple::before{background:#A78BFA}
+  .stat-label{font-size:.72rem;color:var(--text-sec);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem}
+  .stat-value{font-size:2rem;font-weight:700;font-family:var(--mono);line-height:1}
+  .stat-value.cyan{color:var(--accent)}
+  .stat-value.warn{color:var(--warn)}
+  .stat-value.success{color:var(--success)}
+  .stat-value.purple{color:#A78BFA}
+  .stat-sub{font-size:.72rem;color:var(--text-dim);margin-top:.35rem}
+
+  /* ── Progress Items ── */
+  .records-list{display:flex;flex-direction:column;gap:1rem}
+  .record-card{background:var(--bg-card);border:1px solid var(--border);
+    border-radius:var(--radius-lg);padding:1.25rem;transition:border-color .2s}
+  .record-card:hover{border-color:var(--border-lit)}
+  .record-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:.9rem}
+  .record-meta{flex:1}
+  .record-type{display:inline-block;padding:.18rem .55rem;border-radius:4px;font-size:.68rem;
+    font-weight:700;font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.4rem}
+  .record-type.fleet{background:#00D2B920;color:var(--accent)}
+  .record-type.hecp{background:#F59E0B20;color:var(--warn)}
+  .record-type.secp{background:#8B5CF620;color:#A78BFA}
+  .record-ref{font-size:.72rem;font-family:var(--mono);color:var(--text-dim);margin-bottom:.3rem}
+  .record-desc{font-size:.9rem;font-weight:500;color:var(--text-pri)}
+  .record-pct{font-size:1.6rem;font-weight:700;font-family:var(--mono);color:var(--accent);white-space:nowrap}
+  .progress-bar-wrap{margin:.75rem 0 .5rem}
+  .progress-bar-track{height:6px;background:var(--bg-input);border-radius:3px;overflow:hidden}
+  .progress-bar-fill{height:100%;border-radius:3px;transition:width .6s ease;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent))}
+  .progress-bar-fill.warn{background:linear-gradient(90deg,#D97706,var(--warn))}
+  .progress-bar-fill.success{background:linear-gradient(90deg,#16A34A,var(--success))}
+  .trainset-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.75rem}
+  .ts-chip{padding:.2rem .55rem;border-radius:4px;font-size:.72rem;font-family:var(--mono);
+    font-weight:600;border:1px solid}
+  .ts-chip.done{background:var(--success);color:#FFFFFF;border-color:var(--success)}
+  .ts-chip.partial{background:#F59E0B15;color:var(--warn);border-color:#F59E0B40}
+  .ts-chip.pending{background:#EF444415;color:var(--danger);border-color:#EF444440}
+  .applicable-tags{display:flex;gap:.4rem;margin-top:.5rem}
+  .app-tag{padding:.15rem .5rem;border-radius:3px;font-size:.68rem;font-family:var(--mono);
+    font-weight:600;background:var(--bg-input);color:var(--text-dim);border:1px solid var(--border)}
+  .app-tag.active{background:var(--accent-glow);color:var(--accent);border-color:#00D2B940}
+
+  /* ── Form Card ── */
+  .form-card{background:var(--bg-card);border:1px solid var(--border);
+    border-radius:var(--radius-lg);padding:1.5rem;max-width:680px}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+  .form-grid .full{grid-column:1/-1}
+  .form-section{font-size:.72rem;font-weight:600;color:var(--text-dim);
+    text-transform:uppercase;letter-spacing:.1em;margin:1.25rem 0 .75rem;
+    padding-bottom:.4rem;border-bottom:1px solid var(--border)}
+  .checkbox-group{display:flex;gap:1.25rem;flex-wrap:wrap;padding:.5rem 0}
+  .checkbox-label{display:flex;align-items:center;gap:.5rem;cursor:pointer;
+    font-size:.88rem;color:var(--text-sec);user-select:none}
+  .checkbox-label input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+  .checkbox-label:hover{color:var(--text-pri)}
+  .trainset-counter{display:flex;align-items:center;gap:.75rem}
+  .trainset-counter button{width:32px;height:32px;background:var(--bg-input);
+    border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);
+    font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:all .2s;font-family:var(--mono)}
+  .trainset-counter button:hover{border-color:var(--accent);color:var(--accent)}
+  .trainset-counter .count{font-size:1.4rem;font-weight:700;font-family:var(--mono);
+    color:var(--accent);min-width:2.5rem;text-align:center}
+  .btn-save{padding:.7rem 1.75rem;background:var(--accent);border:none;
+    border-radius:var(--radius);color:#060E1C;font-weight:700;font-size:.88rem;
+    cursor:pointer;font-family:var(--sans);transition:all .2s}
+  .btn-save:hover{background:var(--accent-dim);box-shadow:0 0 20px #00D2B940}
+  .btn-cancel{padding:.7rem 1.25rem;background:transparent;border:1px solid var(--border);
+    border-radius:var(--radius);color:var(--text-sec);font-size:.88rem;
+    cursor:pointer;font-family:var(--sans);transition:all .2s;margin-right:.5rem}
+  .btn-cancel:hover{border-color:var(--border-lit);color:var(--text-pri)}
+  .form-actions{display:flex;align-items:center;margin-top:1.5rem;padding-top:1rem;
+    border-top:1px solid var(--border)}
+  .toast{position:fixed;bottom:1.5rem;right:1.5rem;padding:.85rem 1.25rem;
+    background:var(--bg-card);border:1px solid var(--accent);border-radius:var(--radius);
+    color:var(--accent);font-size:.85rem;font-weight:500;z-index:9999;
+    display:none;box-shadow:0 0 30px #00D2B930;animation:slideUp .3s ease}
+  .toast.err{border-color:var(--danger);color:var(--danger);box-shadow:0 0 30px #EF444430}
+  @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+  /* ── Admin Check Panel ── */
+  .check-record{background:var(--bg-card);border:1px solid var(--border);
+    border-radius:var(--radius-lg);margin-bottom:1rem;overflow:hidden}
+  .check-record-header{padding:1.1rem 1.25rem;display:flex;align-items:center;
+    justify-content:space-between;cursor:pointer;transition:background .2s}
+  .check-record-header:hover{background:var(--bg-hover)}
+  .check-record-body{padding:0 1.25rem;max-height:0;overflow:hidden;transition:max-height .35s ease,padding .35s}
+  .check-record-body.open{max-height:10000px;padding:0 1.25rem 1.25rem}
+  .trainset-section{margin-top:.75rem}
+  .ts-header{font-size:.8rem;font-weight:600;color:var(--text-sec);margin-bottom:.5rem;
+    font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+  .ts-check-row{display:flex;align-items:center;justify-content:space-between;
+    padding:.5rem .75rem;background:var(--bg-input);border-radius:var(--radius);
+    margin-bottom:.4rem;border:1px solid var(--border)}
+  .ts-check-label{font-size:.85rem;font-family:var(--mono);color:var(--text-pri)}
+  .ts-checks{display:flex;gap:1rem}
+  .check-item{display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.82rem}
+  .check-item input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer}
+  .check-item label{color:var(--text-sec);cursor:pointer;font-family:var(--mono);font-weight:600;font-size:.75rem}
+  .check-item input:checked+label{color:var(--accent)}
+  .chevron{transition:transform .3s;font-size:.7rem;color:var(--text-dim)}
+  .chevron.open{transform:rotate(180deg)}
+
+  /* ── Empty state ── */
+  .empty-state{text-align:center;padding:4rem 2rem;color:var(--text-dim)}
+  .empty-state .icon{font-size:2.5rem;margin-bottom:.75rem;opacity:.4}
+  .empty-state p{font-size:.9rem}
+
+  /* ── Table ── */
+  .table-wrap{overflow-x:auto;border-radius:var(--radius-lg);border:1px solid var(--border)}
+  table{width:100%;border-collapse:collapse}
+  th{padding:.65rem 1rem;background:var(--bg-card);text-align:left;font-size:.72rem;
+    font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.07em;
+    border-bottom:1px solid var(--border)}
+  td{padding:.65rem 1rem;font-size:.83rem;border-bottom:1px solid var(--border);color:var(--text-sec)}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:var(--bg-hover)}
+  .tbl-mono{font-family:var(--mono);font-size:.78rem}
+  .badge{display:inline-block;padding:.15rem .5rem;border-radius:3px;font-size:.68rem;font-family:var(--mono);font-weight:700}
+  .badge.pct-high{background:#22C55E20;color:var(--success)}
+  .badge.pct-mid{background:#F59E0B20;color:var(--warn)}
+  .badge.pct-low{background:#EF444420;color:var(--danger)}
+
+  /* ── Edit action button in table ── */
+  .btn-edit{padding:.25rem .65rem;background:transparent;border:1px solid var(--border);
+    border-radius:var(--radius);color:var(--text-sec);font-size:.72rem;cursor:pointer;
+    font-family:var(--mono);font-weight:600;transition:all .2s;white-space:nowrap}
+  .btn-edit:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
+  .btn-del{padding:.25rem .65rem;background:transparent;border:1px solid var(--border);
+    border-radius:var(--radius);color:var(--text-sec);font-size:.72rem;cursor:pointer;
+    font-family:var(--mono);font-weight:600;transition:all .2s;white-space:nowrap;margin-left:.3rem}
+  .btn-del:hover{border-color:var(--danger);color:var(--danger);background:#EF444410}
+
+  /* ── Modal ── */
+  .modal-overlay{display:none;position:fixed;inset:0;background:#00000090;z-index:500;
+    align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+  .modal-overlay.open{display:flex}
+  .modal{background:var(--bg-card);border:1px solid var(--border-lit);border-radius:var(--radius-lg);
+    padding:1.75rem;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;
+    box-shadow:0 0 60px #00000080;animation:modalIn .25s ease}
+  @keyframes modalIn{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+  .modal-title{font-size:1.05rem;font-weight:700;margin-bottom:.25rem;color:var(--text-pri)}
+  .modal-sub{font-size:.78rem;color:var(--text-sec);margin-bottom:1.25rem}
+  .modal-actions{display:flex;gap:.5rem;margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border)}
+  .modal-ts-counter{display:flex;align-items:center;gap:.75rem;margin-top:.25rem}
+  .modal-ts-counter button{width:28px;height:28px;background:var(--bg-input);
+    border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);
+    font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:all .2s;font-family:var(--mono)}
+  .modal-ts-counter button:hover{border-color:var(--accent);color:var(--accent)}
+  .modal-ts-counter .count{font-size:1.2rem;font-weight:700;font-family:var(--mono);
+    color:var(--accent);min-width:2rem;text-align:center}
+
+  /* ── Settings Panel ── */
+  .settings-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem}
+  .pw-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem}
+  .pw-card-header{display:flex;align-items:center;gap:.65rem;margin-bottom:1rem}
+  .pw-avatar{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;
+    justify-content:center;font-family:var(--mono);font-weight:700;font-size:.85rem;flex-shrink:0}
+  .pw-avatar.superadmin{background:#00D2B920;color:var(--accent);border:1px solid #00D2B940}
+  .pw-avatar.admin{background:#F59E0B20;color:var(--warn);border:1px solid #F59E0B40}
+  .pw-avatar.viewer{background:#8B5CF620;color:#A78BFA;border:1px solid #8B5CF640}
+  .pw-name{font-size:.9rem;font-weight:600;font-family:var(--mono)}
+  .pw-role{font-size:.7rem;color:var(--text-dim)}
+  .pw-input-wrap{position:relative;margin-bottom:.65rem}
+  .pw-input-wrap input, .pw-input-wrap select{width:100%;padding:.55rem .9rem;background:var(--bg-input);
+    border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);
+    font-family:var(--sans);font-size:.85rem;outline:none;transition:border-color .2s;}
+  .pw-input-wrap input{padding-right:2.2rem;font-family:var(--mono);}
+  .pw-input-wrap input:focus, .pw-input-wrap select:focus{border-color:var(--accent)}
+  .pw-eye{position:absolute;right:.6rem;top:50%;transform:translateY(-50%);
+    background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:.9rem;padding:.1rem}
+  .pw-eye:hover{color:var(--text-sec)}
+  .btn-pw-save{width:100%;padding:.55rem;background:var(--accent);border:none;
+    border-radius:var(--radius);color:#060E1C;font-weight:700;font-size:.8rem;
+    cursor:pointer;font-family:var(--sans);transition:all .2s;margin-top:.25rem}
+  .btn-pw-save:hover{background:var(--accent-dim)}
+
+  .btn-pw-del{width:100%;padding:.55rem;background:transparent;border:1px solid var(--danger);
+    border-radius:var(--radius);color:var(--danger);font-weight:700;font-size:.8rem;
+    cursor:pointer;font-family:var(--sans);transition:all .2s;margin-top:.5rem}
+  .btn-pw-del:hover{background:#EF444415}
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar{width:5px;height:5px}
+  ::-webkit-scrollbar-track{background:var(--bg-deep)}
+  ::-webkit-scrollbar-thumb{background:var(--border-lit);border-radius:10px}
+  ::-webkit-scrollbar-thumb:hover{background:var(--text-dim)}
+
+  /* ── Mobile Bottom Navigation ── */
+  .bottom-nav { display:none; }
+
+  @media(max-width:640px){
+    .sidebar { display:none !important; }
+    .content { padding: 1rem 1rem 5rem 1rem; } /* Extra bottom padding for the bar */
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+    .modal { margin: 1rem; }
+    
+    .bottom-nav {
+      display: flex;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--bg-card);
+      border-top: 1px solid var(--border);
+      padding: 0.5rem 0.25rem;
+      justify-content: space-around;
+      z-index: 1000;
+      padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+      box-shadow: 0 -10px 30px rgba(0,0,0,0.3);
+    }
+    .bnav-item {
+      display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
+      color: var(--text-sec); cursor: pointer; font-size: 0.65rem; font-weight: 600;
+      font-family: var(--sans); text-transform: uppercase; letter-spacing: 0.05em;
+      transition: color 0.2s; padding: 0.2rem;
+    }
+    .bnav-icon { font-size: 1.2rem; font-family: var(--mono); margin-bottom: 0.1rem; }
+    .bnav-item.active { color: var(--accent); }
+    .bnav-item:hover { color: var(--text-pri); }
+  }
+</style>
+
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+
+</head>
+<body>
+<div id="app">
+
+<div class="page active" id="page-login">
+<div class="login-wrap">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="mark">FHS</div>
+      <div class="brand">Fleet/HECP/SECP Tracker<span>Maintenance Management Portal</span></div>
+    </div>
+    <div class="login-title">Sign in</div>
+    <div class="login-sub">Access your role-based workspace</div>
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="login-user" placeholder="Enter username" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="login-pass" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn-primary" onclick="doLogin()">Sign In</button>
+  </div>
+</div>
+</div>
+
+<div class="page" id="page-app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-mark">FHS</div>
+      <div class="topbar-brand">Fleet/HECP/SECP Tracker <span id="topbar-role-label"></span></div>
+    </div>
+    <div class="topbar-right">
+      <span class="role-badge" id="role-badge-el"></span>
+      <span class="topbar-user" id="topbar-user-el"></span>
+      <button class="btn-logout" onclick="doLogout()">Sign Out</button>
+    </div>
+  </div>
+  
+  <div class="main-wrap">
+    <div class="sidebar" id="sidebar">
+      <div class="nav-section">Overview</div>
+      <div class="nav-item active" onclick="showPanel('dashboard')">
+        <span class="nav-icon">⊞</span> Dashboard
+      </div>
+      <div class="nav-section">Management</div>
+      <div class="nav-item" id="nav-create" onclick="showPanel('create')" style="display:none">
+        <span class="nav-icon">＋</span> New Record
+      </div>
+      <div class="nav-item" id="nav-records" onclick="showPanel('records')">
+        <span class="nav-icon">≡</span> All Records
+      </div>
+      <div class="nav-item" id="nav-checks" onclick="showPanel('checks')" style="display:none">
+        <span class="nav-icon">✓</span> Fleet/HECP/SECP Status
+      </div>
+      <div class="nav-item" id="nav-audit" onclick="showPanel('audit')" style="display:none">
+        <span class="nav-icon">⊙</span> Audit Log
+      </div>
+      <div class="nav-item" id="nav-settings" onclick="showPanel('settings')" style="display:none">
+        <span class="nav-icon">⚙</span> Settings
+      </div>
+    </div>
+    
+    <div class="content">
+
+      <div class="panel active" id="panel-dashboard">
+        <div class="panel-title">Dashboard</div>
+        <div class="panel-sub">Fleet/HECP/SECP progress overview</div>
+        <div class="stats-grid" id="stat-cards"></div>
+        <div class="panel-title" style="font-size:1rem;margin-bottom:1rem">Active Records</div>
+        <div class="records-list" id="dash-records"></div>
+      </div>
+
+      <div class="panel" id="panel-create">
+        <div class="panel-title">New Fleet/HECP/SECP Record</div>
+        <div class="panel-sub">Define a fleet/equipment reference with applicable train sets and checks</div>
+        <div class="form-card">
+          <div class="form-grid">
+            <div class="field full">
+              <label>Category</label>
+              <select id="f-type">
+                <option value="">Select category…</option>
+                <option value="FLEET">FLEET</option>
+                <option value="HECP">HECP</option>
+                <option value="SECP">SECP</option>
+              </select>
+            </div>
+            <div class="field full">
+              <label>Reference Number</label>
+              <input type="text" id="f-ref" placeholder="e.g. FLEET-2024-001">
+            </div>
+            <div class="field full">
+              <label>Description</label>
+              <input type="text" id="f-desc" placeholder="Brief description of this Fleet/HECP/SECP item">
+            </div>
+          </div>
+          <div class="form-section">Train Sets</div>
+          <div style="margin-bottom:.5rem;font-size:.82rem;color:var(--text-sec)">Set the total number of train sets in scope</div>
+          <div class="trainset-counter">
+            <button onclick="adjustTS(-1)">−</button>
+            <div class="count" id="ts-count">4</div>
+            <button onclick="adjustTS(1)">＋</button>
+            <span style="font-size:.82rem;color:var(--text-dim);margin-left:.3rem">train sets</span>
+          </div>
+          <div class="form-section">Applicable Checks</div>
+          <div style="font-size:.82rem;color:var(--text-sec);margin-bottom:.6rem">Select which car checks are applicable for this record</div>
+          <div class="checkbox-group">
+            <label class="checkbox-label"><input type="checkbox" id="f-da"> DA — Driving Car A</label>
+            <label class="checkbox-label"><input type="checkbox" id="f-db"> DB — Driving Car B</label>
+            <label class="checkbox-label"><input type="checkbox" id="f-ta"> TA — Trailer Car A</label>
+          </div>
+          <div class="form-actions">
+            <button class="btn-cancel" onclick="showPanel('dashboard')">Cancel</button>
+            <button class="btn-save" onclick="saveRecord()">Save Record</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-records">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <div>
+            <div class="panel-title">All Records</div>
+            <div class="panel-sub" id="records-sub">Complete list of Fleet/HECP/SECP records and their current status</div>
+          </div>
+          <button onclick="exportToCSV()" 
+            style="padding:.4rem .8rem; background:transparent; border:1px solid var(--accent); border-radius:var(--radius); color:var(--accent); font-size:.8rem; cursor:pointer; font-family:var(--sans); font-weight:600; transition:all .2s;">
+            ↓ Export CSV
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              		<tr>
+                		<th>Type</th>
+                		<th>Reference</th>
+                		<th>Description</th>
+                		<th>Train Sets</th>
+                		<th>Applicable</th>
+                		<th>Completed TS</th>
+                		<th>Partial TS</th>
+                		<th>Progress</th>
+                		<th>Remarks</th>
+                		<th id="th-actions" style="display:none">Actions</th>
+              		</tr>
+            		</thead>
+            <tbody id="records-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-checks">
+        <div class="panel-title">Fleet/HECP/SECP Status</div>
+        <div class="panel-sub">Mark completed car checks per train set for each record</div>
+        <div id="checks-list"></div>
+      </div>
+
+      <div class="panel" id="panel-audit">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <div>
+            <div class="panel-title">Audit Log</div>
+            <div class="panel-sub">Record of all actions performed in the system</div>
+          </div>
+          <button id="btn-clear-audit" onclick="clearAuditLog()" 
+            style="display:none; padding:.4rem .8rem; background:transparent; border:1px solid var(--danger); border-radius:var(--radius); color:var(--danger); font-size:.8rem; cursor:pointer; font-family:var(--sans); font-weight:600; transition:all .2s;">
+            ✕ Clear Log
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Time</th><th>User</th><th>Role</th><th>Action</th></tr>
+            </thead>
+            <tbody id="audit-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-settings">
+        <div class="panel-title">Settings</div>
+        <div class="panel-sub">Manage users and passwords</div>
+        <div class="settings-grid" id="settings-cards"></div>
+      </div>
+
+    </div></div><div class="bottom-nav" id="bottom-nav">
+    <div class="bnav-item active" onclick="showPanel('dashboard')" id="bnav-dashboard">
+      <span class="bnav-icon">⊞</span><span>Dash</span>
+    </div>
+    <div class="bnav-item" onclick="showPanel('create')" id="bnav-create" style="display:none">
+      <span class="bnav-icon">＋</span><span>New</span>
+    </div>
+    <div class="bnav-item" onclick="showPanel('records')" id="bnav-records">
+      <span class="bnav-icon">≡</span><span>Records</span>
+    </div>
+    <div class="bnav-item" onclick="showPanel('checks')" id="bnav-checks" style="display:none">
+      <span class="bnav-icon">✓</span><span>Status</span>
+    </div>
+    <div class="bnav-item" onclick="showPanel('audit')" id="bnav-audit" style="display:none">
+      <span class="bnav-icon">⊙</span><span>Audit</span>
+    </div>
+    <div class="bnav-item" onclick="showPanel('settings')" id="bnav-settings" style="display:none">
+      <span class="bnav-icon">⚙</span><span>Settings</span>
+    </div>
+  </div>
+
+</div></div><div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <div class="modal-title">Edit Record</div>
+    <div class="modal-sub">Update record details — existing check data is preserved</div>
+    <div class="field">
+      <label>Category</label>
+      <select id="e-type">
+        <option value="FLEET">FLEET</option>
+        <option value="HECP">HECP</option>
+        <option value="SECP">SECP</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Reference Number</label>
+      <input type="text" id="e-ref" placeholder="e.g. FLEET-2024-001">
+    </div>
+    <div class="field">
+      <label>Description</label>
+      <input type="text" id="e-desc">
+    </div>
+    <div class="field">
+      <label>Train Sets</label>
+      <div class="modal-ts-counter">
+        <button onclick="adjustEditTS(-1)">−</button>
+        <div class="count" id="e-ts-count">4</div>
+        <button onclick="adjustEditTS(1)">＋</button>
+        <span style="font-size:.78rem;color:var(--text-dim);margin-left:.3rem">train sets</span>
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:.25rem">
+      <label>Applicable Checks</label>
+      <div class="checkbox-group" style="margin-top:.3rem">
+        <label class="checkbox-label"><input type="checkbox" id="e-da"> DA — Driving Car A</label>
+        <label class="checkbox-label"><input type="checkbox" id="e-db"> DB — Driving Car B</label>
+        <label class="checkbox-label"><input type="checkbox" id="e-ta"> TA — Trailer Car A</label>
+      </div>
+    </div>
+    <div class="field">
+      <label>Remarks</label>
+      <input type="text" id="e-remark" placeholder="Optional remark">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeEditModal()">Cancel</button>
+      <button class="btn-save" onclick="saveEditRecord()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+//  FIREBASE DATA STORE (Real-Time Sync)
+// ════════════════════════════════════════════════
+
+const firebaseConfig = {
+  apiKey: "AIzaSyB1I1iN5n2TAmqg0eKT3Z5yjtBA6fpjp40",
+  authDomain: "fleet-tracker-d442c.firebaseapp.com",
+  projectId: "fleet-tracker-d442c",
+  storageBucket: "fleet-tracker-d442c.firebasestorage.app",
+  messagingSenderId: "315598515523",
+  appId: "1:315598515523:web:e83983487523447af3d3f6"
+};
+
+// Initialize Firebase using the Compat SDK
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const DEFAULT_PASSWORDS = { superadmin:'admin123', admin:'admin123', viewer:'viewer123' };
+const DEFAULT_USERS = {
+  superadmin: { role:'superadmin', label:'Super Admin' },
+  admin:      { role:'admin',      label:'Admin' },
+  viewer:     { role:'viewer',     label:'Viewer' }
+};
+
+// Variables
+let userMeta = DEFAULT_USERS;
+let passwords = DEFAULT_PASSWORDS;
+let currentUser = JSON.parse(localStorage.getItem('fct_session')) || null;
+let records = [];
+let auditLog = [];
+let tsCount = 4;
+let editTsCount = 4;
+let editIndex = -1;
+
+// ⚡ REAL-TIME SYNC: Listen for live updates from the Cloud
+db.collection("appData").doc("mainStore").onSnapshot((doc) => {
+  if (doc.exists) {
+    const data = doc.data();
+    userMeta  = data.users || DEFAULT_USERS;
+    passwords = data.passwords || DEFAULT_PASSWORDS;
+    records   = data.records || [];
+    auditLog  = data.audit || [];
+    
+    // If a user is logged in, refresh the screen instantly to show new data
+    if (currentUser) {
+      const activePanel = document.querySelector('.panel.active');
+      if (activePanel) {
+        showPanel(activePanel.id.replace('panel-', ''));
+      }
+    }
+  } else {
+    // If database is empty, create the first save
+    save();
+  }
+}, (err) => {
+  console.error("Real-time sync error:", err);
+  showToast("Network error connecting to live database", "err");
+});
+
+function save(){
+  // Push all data to the Cloud
+  db.collection("appData").doc("mainStore").set({
+    users: userMeta,
+    passwords: passwords,
+    records: records,
+    audit: auditLog
+  }).catch(err => {
+    console.error("Error saving to Firebase:", err);
+    showToast("Failed to save to cloud", "err");
+  });
+}
+
+function addAudit(action){
+  if (!currentUser) return;
+  auditLog.unshift({ time: new Date().toISOString(), user: currentUser.name, role: currentUser.role, action });
+  if(auditLog.length > 200) auditLog = auditLog.slice(0,200);
+  save();
+}
+
+// Security Helper to prevent XSS
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, function(m) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m];
+  });
+}
+
+// ════════════════════════════════════════════════
+//  AUTH
+// ════════════════════════════════════════════════
+function doLogin(){
+  const u = document.getElementById('login-user').value.trim().toLowerCase();
+  const p = document.getElementById('login-pass').value;
+  if(!userMeta[u] || passwords[u] !== p){ showToast('Invalid credentials','err'); return; }
+  currentUser = { name: u, role: userMeta[u].role, label: userMeta[u].label };
+  
+  // Save session so it survives a page refresh
+  localStorage.setItem('fct_session', JSON.stringify(currentUser));
+  
+  addAudit('Signed in');
+  document.getElementById('page-login').classList.remove('active');
+  document.getElementById('page-app').classList.add('active');
+  setupRoleUI();
+  showPanel('dashboard');
+}
+
+function doLogout(){
+  addAudit('Signed out');
+  currentUser = null;
+  
+  // Clear the saved session
+  localStorage.removeItem('fct_session');
+  
+  document.getElementById('page-app').classList.remove('active');
+  document.getElementById('page-login').classList.add('active');
+  document.getElementById('login-user').value='';
+  document.getElementById('login-pass').value='';
+}
+
+function setupRoleUI(){
+  const r = currentUser.role;
+  document.getElementById('role-badge-el').className = 'role-badge ' + r;
+  document.getElementById('role-badge-el').textContent = currentUser.label;
+  document.getElementById('topbar-user-el').textContent = currentUser.name;
+  document.getElementById('topbar-role-label').textContent = '';
+  
+  // Desktop Nav Toggles
+  document.getElementById('nav-create').style.display   = r==='superadmin' ? 'flex':'none';
+  document.getElementById('nav-checks').style.display   = r==='admin'      ? 'flex':'none';
+  document.getElementById('nav-settings').style.display = r==='superadmin' ? 'flex':'none';
+  document.getElementById('nav-audit').style.display    = r==='superadmin' ? 'flex':'none'; // Hides Desktop Audit
+  document.getElementById('th-actions').style.display   = r==='superadmin' ? ''    :'none';
+  document.getElementById('btn-clear-audit').style.display = r==='superadmin' ? 'block' : 'none';
+  
+  // Mobile Nav Toggles
+  document.getElementById('bnav-create').style.display   = r==='superadmin' ? 'flex':'none';
+  document.getElementById('bnav-checks').style.display   = r==='admin'      ? 'flex':'none';
+  document.getElementById('bnav-settings').style.display = r==='superadmin' ? 'flex':'none';
+  document.getElementById('bnav-audit').style.display    = r==='superadmin' ? 'flex':'none'; // Hides Mobile Audit
+}
+
+// ════════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════════
+function showPanel(id){
+  // 1. Remove active state from all panels
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  
+  // 2. Remove active state from all nav items (desktop + mobile)
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.bnav-item').forEach(n=>n.classList.remove('active')); 
+  
+  // 3. Show correct panel
+  document.getElementById('panel-'+id).classList.add('active');
+  
+  // 4. Highlight correct desktop nav
+  const nav = document.querySelector(`.nav-item[onclick="showPanel('${id}')"]`);
+  if(nav) nav.classList.add('active');
+  
+  // 5. Highlight correct mobile nav 
+  const bnav = document.getElementById('bnav-'+id);
+  if(bnav) bnav.classList.add('active');
+
+  // 6. Render Data
+  const renders = { dashboard:renderDashboard, records:renderRecordsTable, checks:renderChecks, audit:renderAudit, settings:renderSettings };
+  if(renders[id]) renders[id]();
+}
+
+// ════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════
+function calcProgress(rec){
+  const applicable = ['DA','DB','TA'].filter(k=>rec.applicable[k]);
+  if(!applicable.length || !rec.trainSets) return {pct:0,done:0,total:0};
+  let done=0;
+  const total = rec.trainSets * applicable.length;
+  for(let ts=0;ts<rec.trainSets;ts++){
+    for(const c of applicable){
+      if(rec.checks[ts]&&rec.checks[ts][c]) done++;
+    }
+  }
+  return { pct: total ? Math.round(done/total*100):0, done, total };
+}
+
+function tsStatus(rec, tsIdx){
+  const applicable = ['DA','DB','TA'].filter(k=>rec.applicable[k]);
+  if(!applicable.length) return 'pending';
+  const done = applicable.filter(c=>rec.checks[tsIdx]&&rec.checks[tsIdx][c]).length;
+  if(done===applicable.length) return 'done';
+  if(done>0) return 'partial';
+  return 'pending';
+}
+
+function fmtTime(iso){ const d=new Date(iso); return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
+
+// ════════════════════════════════════════════════
+//  SUPER ADMIN — CREATE RECORD
+// ════════════════════════════════════════════════
+function adjustTS(delta){
+  tsCount = Math.max(1, Math.min(57, tsCount+delta));
+  document.getElementById('ts-count').textContent = tsCount;
+}
+
+function saveRecord(){
+  const type = document.getElementById('f-type').value;
+  const ref  = document.getElementById('f-ref').value.trim();
+  const desc = document.getElementById('f-desc').value.trim();
+  const da   = document.getElementById('f-da').checked;
+  const db   = document.getElementById('f-db').checked;
+  const ta   = document.getElementById('f-ta').checked;
+  if(!type||!ref||!desc){ showToast('Please fill all required fields','err'); return; }
+  if(!da&&!db&&!ta){ showToast('Select at least one applicable check','err'); return; }
+  const rec = {
+    id: Date.now().toString(), type, ref, desc, trainSets: tsCount,
+    applicable:{DA:da,DB:db,TA:ta}, checks:{}, remark:'',
+    createdBy: currentUser.name, createdAt: new Date().toISOString()
+  };
+  records.push(rec);
+  addAudit(`Created record: ${ref} (${type})`);
+  save();
+  showToast('Record saved successfully');
+  document.getElementById('f-type').value='';
+  document.getElementById('f-ref').value='';
+  document.getElementById('f-desc').value='';
+  document.getElementById('f-da').checked=false;
+  document.getElementById('f-db').checked=false;
+  document.getElementById('f-ta').checked=false;
+  tsCount=4; document.getElementById('ts-count').textContent=4;
+  showPanel('dashboard');
+}
+
+// ════════════════════════════════════════════════
+//  SUPER ADMIN — EDIT RECORD MODAL
+// ════════════════════════════════════════════════
+function openEditModal(ri){
+  const r = records[ri];
+  editIndex = ri;
+  editTsCount = r.trainSets;
+  document.getElementById('e-type').value  = r.type;
+  document.getElementById('e-ref').value   = r.ref;
+  document.getElementById('e-desc').value  = r.desc;
+  document.getElementById('e-ts-count').textContent = editTsCount;
+  document.getElementById('e-da').checked  = !!r.applicable.DA;
+  document.getElementById('e-db').checked  = !!r.applicable.DB;
+  document.getElementById('e-ta').checked  = !!r.applicable.TA;
+  document.getElementById('e-remark').value= r.remark||'';
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function closeEditModal(){
+  document.getElementById('edit-modal').classList.remove('open');
+  editIndex = -1;
+}
+
+function adjustEditTS(delta){
+  editTsCount = Math.max(1, Math.min(57, editTsCount+delta));
+  document.getElementById('e-ts-count').textContent = editTsCount;
+}
+
+function saveEditRecord(){
+  if(editIndex < 0) return;
+  const type   = document.getElementById('e-type').value;
+  const ref    = document.getElementById('e-ref').value.trim();
+  const desc   = document.getElementById('e-desc').value.trim();
+  const da     = document.getElementById('e-da').checked;
+  const db     = document.getElementById('e-db').checked;
+  const ta     = document.getElementById('e-ta').checked;
+  const remark = document.getElementById('e-remark').value.trim();
+  if(!type||!ref||!desc){ showToast('Please fill all required fields','err'); return; }
+  if(!da&&!db&&!ta){ showToast('Select at least one applicable check','err'); return; }
+  const rec = records[editIndex];
+  const oldRef = rec.ref;
+  rec.type = type; rec.ref = ref; rec.desc = desc;
+  rec.trainSets = editTsCount;
+  rec.applicable = {DA:da, DB:db, TA:ta};
+  rec.remark = remark;
+  rec.lastEditedBy = currentUser.name;
+  rec.lastEditedAt = new Date().toISOString();
+  addAudit(`Edited record: ${oldRef} → ${ref} (${type})`);
+  save();
+  closeEditModal();
+  showToast('Record updated');
+  renderRecordsTable();
+}
+
+function deleteRecord(ri){
+  const rec = records[ri];
+  if(!confirm(`Delete record "${rec.ref}"? This cannot be undone.`)) return;
+  addAudit(`Deleted record: ${rec.ref} (${rec.type})`);
+  records.splice(ri,1);
+  save();
+  showToast('Record deleted');
+  renderRecordsTable();
+}
+
+// Close modal on overlay click
+document.getElementById('edit-modal').addEventListener('click', function(e){
+  if(e.target===this) closeEditModal();
+});
+
+// ════════════════════════════════════════════════
+//  SUPER ADMIN — SAVE RECORD-LEVEL REMARK
+// ════════════════════════════════════════════════
+function saveRecordRemark(ri){
+  const rec = records[ri];
+  const val = document.getElementById(`rec-rmk-${ri}`).value.trim();
+  rec.remark = val;
+  addAudit(`Record remark updated for ${rec.ref}: "${val}"`);
+  save();
+  showToast('Remark saved');
+}
+
+// ════════════════════════════════════════════════
+//  DASHBOARD
+// ════════════════════════════════════════════════
+function renderDashboard(){
+  const total = records.length;
+  let sumPct = 0, complete = 0;
+  
+  // Calculate overall statistics
+  records.forEach(r => { 
+    const { pct } = calcProgress(r); 
+    sumPct += pct; 
+    if(pct === 100) complete++; 
+  });
+  
+  const avg = total ? Math.round(sumPct / total) : 0;
+  
+  // Render top overall stats[cite: 1]
+  document.getElementById('stat-cards').innerHTML = `
+    <div class="stat-card cyan"><div class="stat-label">Total Records</div><div class="stat-value cyan">${total}</div><div class="stat-sub">across all categories</div></div>
+    <div class="stat-card success"><div class="stat-label">Completed</div><div class="stat-value success">${complete}</div><div class="stat-sub">100% checks done</div></div>
+    <div class="stat-card warn"><div class="stat-label">Avg Progress</div><div class="stat-value warn">${avg}%</div><div class="stat-sub">overall completion</div></div>
+    <div class="stat-card purple"><div class="stat-label">In Progress</div><div class="stat-value purple">${total-complete}</div><div class="stat-sub">pending full completion</div></div>`;
+    
+  const list = document.getElementById('dash-records');
+  
+  if(!records.length){ 
+    list.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>No records yet. Super Admin can create the first one.</p></div>`; 
+    return; 
+  }
+  
+  const categories = ['HECP', 'SECP', 'FLEET'];
+  let dashboardHtml = '';
+
+  // Generate boxes for each category
+  categories.forEach(cat => {
+    const catRecords = records.filter(r => r.type === cat);
+    
+    let completed = [];
+    let inProgress = [];
+    let yetToStart = [];
+
+    catRecords.forEach(r => {
+      const { pct, done, total: t } = calcProgress(r);
+      let tsDoneCount = 0;
+      let tsPartialCount = 0;
+      
+      const chips = Array.from({ length: r.trainSets }, (_, i) => {
+        const s = tsStatus(r, i);
+        if(s === 'done') tsDoneCount++;
+        if(s === 'partial') tsPartialCount++;
+        return `<span class="ts-chip ${s}">TS${i+1}</span>`;
+      }).join('');
+      
+      const appTags = ['DA','DB','TA'].map(k => `<span class="app-tag ${r.applicable[k] ? 'active' : ''}">${k}</span>`).join('');
+      const fc = pct === 100 ? 'success' : pct > 0 ? 'warn' : '';
+      
+      // Card template[cite: 1]
+      const cardHtml = `<div class="record-card">
+        <div class="record-header">
+          <div class="record-meta">
+            <div><span class="record-type ${r.type.toLowerCase()}">${r.type}</span></div>
+            <div class="record-ref">${esc(r.ref)}</div>
+            <div class="record-desc">${esc(r.desc)}</div>
+            <div class="applicable-tags" style="margin-top:.5rem">${appTags}</div>
+          </div>
+          <div class="record-pct">${pct}%</div>
+        </div>
+        <div class="progress-bar-wrap">
+          <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--text-dim);margin-bottom:.15rem">
+            <span>${done} of ${t} checks completed</span><span>${r.trainSets} train sets</span>
+          </div>
+          
+          <div style="display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:.4rem;font-family:var(--mono);">
+            <span style="color:#FFFFFF;">${tsDoneCount} Fully Completed</span>
+            <span style="color:var(--warn);">${tsPartialCount} Partially Completed</span>
+          </div>
+          
+          <div class="progress-bar-track"><div class="progress-bar-fill ${fc}" style="width:${pct}%"></div></div>
+        </div>
+        <div class="trainset-chips">${chips}</div>
+      </div>`;
+
+      // Group by progress status
+      if (pct === 100) completed.push(cardHtml);
+      else if (pct > 0) inProgress.push(cardHtml);
+      else yetToStart.push(cardHtml);
+    });
+
+    // Build the category container
+    dashboardHtml += `
+      <div class="category-box" style="margin-bottom: 2rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem;">
+        <div class="category-title" style="font-size: 1.2rem; font-weight: 700; color: var(--text-pri); margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.8rem; display: flex; align-items: center; gap: 0.75rem;">
+          <span class="record-type ${cat.toLowerCase()}" style="font-size: 0.9rem; padding: 0.3rem 0.8rem; margin: 0;">${cat}</span> Tracker
+        </div>`;
+
+    if (catRecords.length === 0) {
+      dashboardHtml += `<div style="color: var(--text-dim); font-size: 0.9rem;">No active records for ${cat}.</div>`;
+    } else {
+      // Completed Section
+      if (completed.length > 0) {
+        dashboardHtml += `
+          <div style="margin-bottom: 1.5rem;">
+            <div style="font-size: 0.85rem; font-weight: 600; color: var(--success); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.5rem;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--success);"></span> Completed (${completed.length})
+            </div>
+            <div class="records-list">${completed.join('')}</div>
+          </div>`;
+      }
+      // In Progress Section
+      if (inProgress.length > 0) {
+        dashboardHtml += `
+          <div style="margin-bottom: 1.5rem;">
+            <div style="font-size: 0.85rem; font-weight: 600; color: var(--warn); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.5rem;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--warn);"></span> In Progress (${inProgress.length})
+            </div>
+            <div class="records-list">${inProgress.join('')}</div>
+          </div>`;
+      }
+      // Yet To Start Section
+      if (yetToStart.length > 0) {
+        dashboardHtml += `
+          <div style="margin-bottom: 0.5rem;">
+            <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-sec); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.5rem;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--text-sec);"></span> Yet To Start (${yetToStart.length})
+            </div>
+            <div class="records-list">${yetToStart.join('')}</div>
+          </div>`;
+      }
+    }
+    dashboardHtml += `</div>`;
+  });
+
+  list.innerHTML = dashboardHtml;
+}
+
+// ════════════════════════════════════════════════
+//  RECORDS TABLE
+// ════════════════════════════════════════════════
+function renderRecordsTable(){
+  const tbody = document.getElementById('records-tbody');
+  const isSA = currentUser && currentUser.role==='superadmin';
+  document.getElementById('th-actions').style.display = isSA ? '':'none';
+  if(!records.length){
+    tbody.innerHTML=`<tr><td colspan="${isSA?10:9}" style="text-align:center;color:var(--text-dim);padding:2rem">No records found</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = records.map((r,ri)=>{
+    const {pct}=calcProgress(r);
+    const cl=pct===100?'pct-high':pct>0?'pct-mid':'pct-low';
+    const app=['DA','DB','TA'].filter(k=>r.applicable[k]).join(' · ');
+    
+    // Calculate done and partial counts
+    let tsDoneCount = 0;
+    let tsPartialCount = 0;
+    for (let i = 0; i < r.trainSets; i++) {
+      const s = tsStatus(r, i);
+      if (s === 'done') tsDoneCount++;
+      if (s === 'partial') tsPartialCount++;
+    }
+
+    const remark=r.remark||'';
+    const remarkCell = isSA
+      ? `<td style="min-width:180px">
+           <div style="display:flex;gap:.4rem;align-items:center">
+             <input type="text" id="rec-rmk-${ri}" value="${esc(remark)}" placeholder="Add remark…"
+               style="flex:1;padding:.28rem .55rem;background:var(--bg-input);border:1px solid var(--border);
+                      border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;min-width:0"
+               onfocus="this.style.borderColor='var(--accent)'"
+               onblur="this.style.borderColor='var(--border)'"
+               onkeydown="if(event.key==='Enter')saveRecordRemark(${ri})">
+             <button onclick="saveRecordRemark(${ri})"
+               style="padding:.28rem .6rem;background:var(--accent);border:none;border-radius:var(--radius);
+                      color:#060E1C;font-size:.72rem;font-weight:700;cursor:pointer;font-family:var(--sans);flex-shrink:0">✓</button>
+           </div>
+         </td>`
+      : `<td style="font-size:.8rem;color:var(--text-sec)">${esc(remark)||'<span style="color:var(--text-dim)">—</span>'}</td>`;
+    const actionsCell = isSA
+      ? `<td style="white-space:nowrap">
+           <button class="btn-edit" onclick="openEditModal(${ri})">✎ Edit</button>
+           <button class="btn-del"  onclick="deleteRecord(${ri})">✕ Delete</button>
+         </td>`
+      : '';
+    return `<tr>
+      <td><span class="record-type ${r.type.toLowerCase()}">${r.type}</span></td>
+      <td class="tbl-mono">${esc(r.ref)}</td>
+      <td>${esc(r.desc)}</td>
+      <td class="tbl-mono" style="text-align:center">${r.trainSets}</td>
+      <td class="tbl-mono">${app}</td>
+      <td class="tbl-mono" style="text-align:center; color:var(--success); font-weight:700;">${tsDoneCount}</td>
+      <td class="tbl-mono" style="text-align:center; color:var(--warn); font-weight:700;">${tsPartialCount}</td>
+      <td><span class="badge ${cl}">${pct}%</span></td>
+      ${remarkCell}
+      ${actionsCell}
+    </tr>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════
+//  EXPORT TO CSV
+// ════════════════════════════════════════════════
+function exportToCSV() {
+  if (!records || records.length === 0) {
+    showToast('No records to export', 'err');
+    return;
+  }
+
+  // 1. Define CSV Headers
+  let csv = 'Type,Reference,Description,Total Train Sets,Applicable Checks,Overall Progress,Fully Completed TS,Partially Completed TS,Record Remarks\n';
+
+  // 2. Helper to escape commas and quotes in CSV fields
+  const escapeCSV = (str) => `"${String(str || '').replace(/"/g, '""')}"`;
+
+  // 3. Process each record
+  records.forEach(r => {
+    const { pct } = calcProgress(r);
+    const app = ['DA', 'DB', 'TA'].filter(k => r.applicable[k]).join(' / ');
+
+    let doneTS = [];
+    let partialTS = [];
+
+    // Check completion status for each train set
+    for (let i = 0; i < r.trainSets; i++) {
+      const status = tsStatus(r, i);
+      if (status === 'done') {
+        doneTS.push('TS' + (i + 1));
+      } else if (status === 'partial') {
+        partialTS.push('TS' + (i + 1));
+      }
+    }
+
+    // Build the row
+    const row = [
+      escapeCSV(r.type),
+      escapeCSV(r.ref),
+      escapeCSV(r.desc),
+      r.trainSets,
+      escapeCSV(app),
+      `${pct}%`,
+      escapeCSV(doneTS.join(', ')),     // Lists fully checked TS numbers (e.g., "TS1, TS3")
+      escapeCSV(partialTS.join(', ')),  // Lists partially checked TS numbers
+      escapeCSV(r.remark)
+    ];
+
+    csv += row.join(',') + '\n';
+  });
+
+  // 4. Trigger the download
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  
+  // Format filename with current date
+  const dateStr = new Date().toISOString().slice(0, 10);
+  link.setAttribute('href', url);
+  link.setAttribute('download', `FHS_Tracker_Export_${dateStr}.csv`);
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  addAudit('Exported records to CSV');
+  showToast('Export successful');
+}
+
+// ════════════════════════════════════════════════
+//  ADMIN — COMPLIANCE CHECKS
+// ════════════════════════════════════════════════
+function renderChecks(){
+  const container = document.getElementById('checks-list');
+  
+  // Remember which accordions are open
+  const openAccordions = Array.from(document.querySelectorAll('.check-record-body.open')).map(el => el.id);
+
+  if(!records.length){ container.innerHTML=`<div class="empty-state"><div class="icon">📋</div><p>No records available. Ask Super Admin to create records first.</p></div>`; return; }
+  
+  container.innerHTML = records.map((r,ri)=>{
+    const applicable=['DA','DB','TA'].filter(k=>r.applicable[k]);
+    const {pct}=calcProgress(r);
+    const tsRows=Array.from({length:r.trainSets},(_,ti)=>{
+      
+      const checks=applicable.map(c=>{
+        const checked=r.checks[ti]&&r.checks[ti][c]?'checked':'';
+        // Removed the onchange handler to prevent auto-saving
+        return `<div class="check-item">
+          <input type="checkbox" id="chk-${ri}-${ti}-${c}" ${checked}>
+          <label for="chk-${ri}-${ti}-${c}">${c}</label>
+        </div>`;
+      }).join('');
+      
+      const s=tsStatus(r,ti);
+      const existingRemark=(r.checks[ti]&&r.checks[ti]['remark'])?r.checks[ti]['remark']:'';
+      const existingEmp=(r.checks[ti]&&r.checks[ti]['empId'])?r.checks[ti]['empId']:'';
+      const existingDate=(r.checks[ti]&&r.checks[ti]['date'])?r.checks[ti]['date']:'';
+      
+      return `<div class="ts-check-row" style="flex-wrap:wrap;gap:.5rem">
+        <span class="ts-check-label">Train Set ${ti+1} <span class="ts-chip ${s}" style="margin-left:.5rem">TS${ti+1}</span></span>
+        <div class="ts-checks">${checks}</div>
+        <div style="display:flex;align-items:center;gap:.5rem;width:100%;margin-top:.35rem;flex-wrap:wrap;">
+          
+          <input type="text" id="emp-${ri}-${ti}" value="${esc(existingEmp)}" placeholder="Emp ID"
+            style="width:90px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+            
+          <input type="date" id="date-${ri}-${ti}" value="${esc(existingDate)}"
+            style="width:125px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;color-scheme:dark;"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+            
+          <input type="text" id="rmk-${ri}-${ti}" value="${esc(existingRemark)}" placeholder="Remarks…"
+            style="flex:1;min-width:150px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+            
+          <button onclick="saveTrainSetData(${ri},${ti})"
+            style="padding:.32rem .75rem;background:var(--accent);border:none;border-radius:var(--radius);color:#060E1C;font-size:.75rem;font-weight:700;cursor:pointer;font-family:var(--sans);white-space:nowrap">Save</button>
+            
+        </div>
+      </div>`;
+    }).join('');
+    const fc=pct===100?'success':pct>0?'warn':'';
+    return `<div class="check-record">
+      <div class="check-record-header" onclick="toggleAccordion(${ri})">
+        <div style="display:flex;align-items:center;gap:.75rem;flex:1;min-width:0">
+          <span class="record-type ${r.type.toLowerCase()}">${r.type}</span>
+          <span style="font-family:var(--mono);font-size:.8rem;color:var(--text-dim)">${esc(r.ref)}</span>
+          <span style="font-size:.88rem;color:var(--text-pri);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.desc)}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:.75rem;flex-shrink:0">
+          <div class="progress-bar-track" style="width:80px"><div class="progress-bar-fill ${fc}" style="width:${pct}%"></div></div>
+          <span style="font-family:var(--mono);font-size:.82rem;color:var(--accent);min-width:2.5rem;text-align:right">${pct}%</span>
+          <span class="chevron" id="chevron-${ri}">▼</span>
+        </div>
+      </div>
+      <div class="check-record-body" id="acc-${ri}">
+        <div class="trainset-section">
+          <div class="ts-header">Train Sets — Check applicable cars</div>
+          ${tsRows}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Re-open previously open accordions
+  openAccordions.forEach(id => {
+    const body = document.getElementById(id);
+    if (body) body.classList.add('open');
+    const ri = id.replace('acc-', '');
+    const chevron = document.getElementById('chevron-' + ri);
+    if (chevron) chevron.classList.add('open');
+  });
+}
+
+function toggleAccordion(ri){
+  document.getElementById('acc-'+ri).classList.toggle('open');
+  document.getElementById('chevron-'+ri).classList.toggle('open');
+}
+
+function saveTrainSetData(ri, ti) {
+  const rec = records[ri];
+  if(!rec.checks[ti]) rec.checks[ti] = {};
+
+  // 1. Read & save checkbox states
+  const applicable = ['DA','DB','TA'].filter(k=>rec.applicable[k]);
+  applicable.forEach(c => {
+    const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
+    if (cb) {
+      rec.checks[ti][c] = cb.checked;
+    }
+  });
+
+  // 2. Read & save input fields
+  rec.checks[ti]['empId'] = document.getElementById(`emp-${ri}-${ti}`).value.trim();
+  rec.checks[ti]['date'] = document.getElementById(`date-${ri}-${ti}`).value.trim();
+  rec.checks[ti]['remark'] = document.getElementById(`rmk-${ri}-${ti}`).value.trim();
+
+  addAudit(`Updated TS${ti+1} checks & details for ${rec.ref}`);
+  save();
+
+  // 3. Check progress for success messaging
+  const {pct} = calcProgress(rec);
+  if (pct === 100) {
+    showToast(`${rec.ref} — 100% complete! ✓`);
+  } else {
+    showToast(`Train Set ${ti+1} saved`);
+  }
+
+  // 4. Re-render the panel to update progress bars and statuses
+  renderChecks();
+}
+
+// ════════════════════════════════════════════════
+//  SETTINGS — PASSWORD MANAGEMENT (Super Admin)
+// ════════════════════════════════════════════════
+function renderSettings(){
+  const users = Object.keys(userMeta);
+  
+  // Render existing user password cards
+  let html = users.map(u=>{
+    const meta = userMeta[u];
+    
+    // Prevent the currently logged-in user from deleting themselves
+    const deleteBtn = (u !== currentUser.name) 
+      ? `<button class="btn-pw-del" onclick="deleteUser('${u}')">Delete User</button>` 
+      : ``;
+
+    return `<div class="pw-card">
+      <div class="pw-card-header">
+        <div class="pw-avatar ${meta.role}">${u.slice(0,2).toUpperCase()}</div>
+        <div><div class="pw-name">${esc(u)}</div><div class="pw-role">${meta.label}</div></div>
+      </div>
+      <div style="font-size:.72rem;color:var(--text-dim);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.06em">New Password</div>
+      <div class="pw-input-wrap">
+        <input type="password" id="pw-new-${u}" placeholder="Enter new password…">
+        <button class="pw-eye" onclick="togglePwEye('pw-new-${u}',this)">👁</button>
+      </div>
+      <div style="font-size:.72rem;color:var(--text-dim);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.06em">Confirm Password</div>
+      <div class="pw-input-wrap">
+        <input type="password" id="pw-con-${u}" placeholder="Repeat new password…">
+        <button class="pw-eye" onclick="togglePwEye('pw-con-${u}',this)">👁</button>
+      </div>
+      <button class="btn-pw-save" onclick="changePassword('${u}')">Update Password</button>
+      ${deleteBtn}
+    </div>`;
+  }).join('');
+
+  // Add the "Create New User" card
+  html += `
+    <div class="pw-card" style="border-color:var(--accent); background:var(--accent-glow)">
+      <div class="pw-card-header">
+        <div class="pw-avatar" style="background:var(--accent);color:#060E1C;font-size:1.2rem">+</div>
+        <div><div class="pw-name">Add New User</div><div class="pw-role">Create Admin or Viewer</div></div>
+      </div>
+      <div class="pw-input-wrap">
+        <input type="text" id="new-u-name" placeholder="Enter Username (lowercase)" autocomplete="off">
+      </div>
+      <div class="pw-input-wrap">
+        <select id="new-u-role">
+          <option value="admin">Admin</option>
+          <option value="viewer">Viewer</option>
+        </select>
+      </div>
+      <div class="pw-input-wrap">
+        <input type="password" id="new-u-pass" placeholder="Enter Password">
+      </div>
+      <button class="btn-pw-save" onclick="addNewUser()">Create User</button>
+    </div>
+  `;
+
+  document.getElementById('settings-cards').innerHTML = html;
+}
+
+function addNewUser() {
+  const u = document.getElementById('new-u-name').value.trim().toLowerCase();
+  const r = document.getElementById('new-u-role').value;
+  const p = document.getElementById('new-u-pass').value;
+  
+  if(!u || !p) { showToast('Please enter both username and password', 'err'); return; }
+  if(userMeta[u]) { showToast('User already exists', 'err'); return; }
+  if(p.length < 4) { showToast('Password must be at least 4 characters', 'err'); return; }
+  if(/[^a-z0-9]/.test(u)) { showToast('Username must be alphanumeric and lowercase', 'err'); return; }
+
+  userMeta[u] = { role: r, label: r === 'admin' ? 'Admin' : 'Viewer' };
+  passwords[u] = p;
+  
+  addAudit(`Created new user: ${u} (${r})`);
+  save();
+  renderSettings();
+  showToast('New user created successfully');
+}
+
+function deleteUser(username) {
+  if (username === currentUser.name) {
+    showToast('You cannot delete your own active account.', 'err');
+    return;
+  }
+  
+  if (!confirm(`Are you sure you want to permanently delete the user "${username}"?`)) {
+    return;
+  }
+
+  // Remove the user from both the metadata and password stores
+  delete userMeta[username];
+  delete passwords[username];
+  
+  addAudit(`Deleted user: ${username}`);
+  save();
+  renderSettings();
+  showToast(`User ${username} has been deleted.`);
+}
+
+function togglePwEye(id, btn){
+  const inp=document.getElementById(id);
+  if(inp.type==='password'){inp.type='text';btn.textContent='🔒';}
+  else{inp.type='password';btn.textContent='👁';}
+}
+
+function changePassword(username){
+  const np=document.getElementById(`pw-new-${username}`).value;
+  const cp=document.getElementById(`pw-con-${username}`).value;
+  if(!np){ showToast('Please enter a new password','err'); return; }
+  if(np.length < 4){ showToast('Password must be at least 4 characters','err'); return; }
+  if(np!==cp){ showToast('Passwords do not match','err'); return; }
+  passwords[username]=np;
+  addAudit(`Password changed for user: ${username}`);
+  save();
+  document.getElementById(`pw-new-${username}`).value='';
+  document.getElementById(`pw-con-${username}`).value='';
+
+  showToast(`Password updated for ${username}`);
+}
+
+// ════════════════════════════════════════════════
+//  AUDIT
+// ════════════════════════════════════════════════
+function renderAudit(){
+  const tbody=document.getElementById('audit-tbody');
+  if(!auditLog.length){tbody.innerHTML=`<tr><td colspan="4" style="text-align:center;color:var(--text-dim);padding:2rem">No audit entries yet</td></tr>`;return;}
+  tbody.innerHTML=auditLog.map(e=>`<tr>
+    <td class="tbl-mono">${fmtTime(e.time)}</td>
+    <td class="tbl-mono">${esc(e.user)}</td>
+    <td><span class="role-badge ${e.role}" style="font-size:.65rem">${e.role}</span></td>
+    <td>${esc(e.action)}</td>
+  </tr>`).join('');
+}
+
+function clearAuditLog() {
+  if(!confirm("Are you sure you want to permanently clear the audit log? This cannot be undone.")) return;
+  auditLog = []; 
+  addAudit('Cleared the entire audit log');
+  renderAudit();
+  showToast('Audit log cleared');
+}
+
+// ════════════════════════════════════════════════
+//  TOAST
+// ════════════════════════════════════════════════
+let toastTimer;
+function showToast(msg, type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className='toast'+(type?' '+type:'');
+  t.style.display='block';
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{t.style.display='none';},3000);
+}
+
+// ════════════════════════════════════════════════
+//  APP INITIALIZATION (Persist Login)
+// ════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  if (currentUser) {
+    document.getElementById('page-login').classList.remove('active');
+    document.getElementById('page-app').classList.add('active');
+    setupRoleUI();
+    showPanel('dashboard');
+  }
+});
+
+// ════════════════════════════════════════════════
+//  PWA SERVICE WORKER
+// ════════════════════════════════════════════════
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
