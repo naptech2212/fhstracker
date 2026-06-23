@@ -1305,8 +1305,6 @@ function renderSettings(){
   // Render existing user password cards
   let html = users.map(u=>{
     const meta = userMeta[u];
-    
-    // Prevent the currently logged-in user from deleting themselves
     const deleteBtn = (u !== currentUser.name) 
       ? `<button class="btn-pw-del" onclick="deleteUser('${u}')">Delete User</button>` 
       : ``;
@@ -1354,9 +1352,106 @@ function renderSettings(){
     </div>
   `;
 
+  // 🔥 NEW: Add the Backup & Restore Card
+  html += `
+    <div class="pw-card" style="border-color:var(--text-dim);">
+      <div class="pw-card-header">
+        <div class="pw-avatar" style="background:var(--bg-input);color:var(--text-pri);font-size:1.1rem">💾</div>
+        <div><div class="pw-name">Database Backup</div><div class="pw-role">Export or Restore System Data</div></div>
+      </div>
+      <div style="font-size:.8rem;color:var(--text-sec);margin-bottom:1rem;line-height:1.4">
+        Download a full snapshot of your users, passwords, records, and audit logs.
+      </div>
+      <button class="btn-pw-save" style="margin-bottom:.5rem" onclick="downloadBackup()">↓ Download Backup (.json)</button>
+      
+      <div style="width:100%; height:1px; background:var(--border); margin: 1rem 0;"></div>
+      
+      <div style="font-size:.8rem;color:var(--warn);margin-bottom:1rem;line-height:1.4">
+        Restoring will <b>permanently overwrite</b> the current live database.
+      </div>
+      <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreBackup(event)">
+      <button class="btn-pw-del" style="border-color:var(--warn); color:var(--warn)" onclick="document.getElementById('restore-file').click()">↑ Restore from Backup</button>
+    </div>
+  `;
+
   document.getElementById('settings-cards').innerHTML = html;
 }
 
+// ════════════════════════════════════════════════
+//  BACKUP & RESTORE
+// ════════════════════════════════════════════════
+
+function downloadBackup() {
+  if (!currentUser || currentUser.role !== 'superadmin') return;
+  
+  // Package the current state into an object
+  const dataToBackup = {
+    users: userMeta,
+    passwords: passwords,
+    records: records,
+    audit: auditLog
+  };
+
+  // Convert to JSON and create a downloadable file
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToBackup, null, 2));
+  const downloadAnchorNode = document.createElement('a');
+  
+  const dateStr = new Date().toISOString().slice(0, 10);
+  downloadAnchorNode.setAttribute("href", dataStr);
+  downloadAnchorNode.setAttribute("download", `FHS_Database_Backup_${dateStr}.json`);
+  
+  document.body.appendChild(downloadAnchorNode); // Required for Firefox
+  downloadAnchorNode.click();
+  downloadAnchorNode.remove();
+  
+  addAudit('Downloaded full database backup');
+  showToast('Backup downloaded successfully');
+}
+
+function restoreBackup(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  // Double confirmation to prevent accidental overwrites
+  if (!confirm("WARNING: This will completely wipe the current live database and replace it with the backup file. Are you absolutely sure?")) {
+    event.target.value = ''; // Reset input
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const importedData = JSON.parse(e.target.result);
+      
+      // Basic validation to ensure they didn't upload a random text file
+      if (!importedData.users || !importedData.records) {
+         showToast('Invalid backup file format', 'err');
+         return;
+      }
+
+      // Push the backup directly to Firebase
+      db.collection("appData").doc("mainStore").set(importedData).then(() => {
+        // Record the action using the newly imported audit log
+        auditLog = importedData.audit || []; 
+        addAudit('Restored database from backup file');
+        
+        showToast('Database restored! Refreshing app...');
+        
+        // Reload the page after 1.5 seconds so the app fetches the fresh data cleanly
+        setTimeout(() => location.reload(), 1500);
+      }).catch(err => {
+        console.error(err);
+        showToast('Failed to push restore to cloud', 'err');
+      });
+
+    } catch (err) {
+      showToast('Error reading backup file. Must be a valid JSON.', 'err');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = ''; // Reset input so the same file can be selected again if needed
+}  
+    
 function addNewUser() {
   const u = document.getElementById('new-u-name').value.trim().toLowerCase();
   const r = document.getElementById('new-u-role').value;
