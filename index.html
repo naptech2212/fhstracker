@@ -1117,44 +1117,40 @@ function exportToCSV() {
     return;
   }
 
-  // 1. Define CSV Headers
-  let csv = 'Type,Reference,Description,Total Train Sets,Applicable Checks,Overall Progress,Fully Completed TS,Partially Completed TS,Record Remarks\n';
+  // 1. Define CSV Headers targeting the specific requested columns
+  // Adding "Record Reference" so you know which record the TS belongs to
+  let csv = 'Record Reference,TS#,Date,Done By,Remarks\n';
 
   // 2. Helper to escape commas and quotes in CSV fields
   const escapeCSV = (str) => `"${String(str || '').replace(/"/g, '""')}"`;
 
-  // 3. Process each record
+  // 3. Process each record and its train sets
   records.forEach(r => {
-    const { pct } = calcProgress(r);
-    const app = ['DA', 'DB', 'TA'].filter(k => r.applicable[k]).join(' / ');
-
-    let doneTS = [];
-    let partialTS = [];
-
-    // Check completion status for each train set
+    // Loop through each train set within the record
     for (let i = 0; i < r.trainSets; i++) {
-      const status = tsStatus(r, i);
-      if (status === 'done') {
-        doneTS.push('TS' + (i + 1));
-      } else if (status === 'partial') {
-        partialTS.push('TS' + (i + 1));
-      }
+      const checkData = r.checks[i] || {};
+      const tsNum = 'TS' + (i + 1);
+      
+      // Map to the requested data fields
+      const date = checkData.date || '';
+      const doneBy = checkData.empId || ''; // 'empId' acts as 'Done By'
+      const remarks = checkData.remark || '';
+
+      // Build the row
+      const row = [
+        escapeCSV(r.ref),
+        escapeCSV(tsNum),
+        escapeCSV(date),
+        escapeCSV(doneBy),
+        escapeCSV(remarks)
+      ];
+
+      csv += row.join(',') + '\n';
     }
-
-    // Build the row
-    const row = [
-      escapeCSV(r.type),
-      escapeCSV(r.ref),
-      escapeCSV(r.desc),
-      r.trainSets,
-      escapeCSV(app),
-      `${pct}%`,
-      escapeCSV(doneTS.join(', ')),     // Lists fully checked TS numbers (e.g., "TS1, TS3")
-      escapeCSV(partialTS.join(', ')),  // Lists partially checked TS numbers
-      escapeCSV(r.remark)
-    ];
-
-    csv += row.join(',') + '\n';
+    
+    // Add a blank row to visually separate each record 
+    // (simulating separate "sheets" in a single table view)
+    csv += ',,,,\n';
   });
 
   // 4. Trigger the download
@@ -1174,7 +1170,7 @@ function exportToCSV() {
   addAudit('Exported records to CSV');
   showToast('Export successful');
 }
-
+  
 // ════════════════════════════════════════════════
 //  ADMIN — COMPLIANCE CHECKS
 // ════════════════════════════════════════════════
