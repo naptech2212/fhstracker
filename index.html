@@ -1117,9 +1117,8 @@ function exportToCSV() {
     return;
   }
 
-  // 1. Define CSV Headers targeting the specific requested columns
-  // Adding "Record Reference" so you know which record the TS belongs to
-  let csv = 'Record Reference,TS#,Date,Done By,Remarks\n';
+  // 1. Updated Headers to include the Status column
+  let csv = 'Record Reference,TS#,Status,Date,Done By,Remarks\n';
 
   // 2. Helper to escape commas and quotes in CSV fields
   const escapeCSV = (str) => `"${String(str || '').replace(/"/g, '""')}"`;
@@ -1131,15 +1130,18 @@ function exportToCSV() {
       const checkData = r.checks[i] || {};
       const tsNum = 'TS' + (i + 1);
       
-      // Map to the requested data fields
+      // Determine the status (done, partial, or pending) using the app's existing logic
+      const status = tsStatus(r, i); 
+      
       const date = checkData.date || '';
-      const doneBy = checkData.empId || ''; // 'empId' acts as 'Done By'
+      const doneBy = checkData.empId || ''; 
       const remarks = checkData.remark || '';
 
-      // Build the row
+      // Build the row with the new Status column
       const row = [
         escapeCSV(r.ref),
         escapeCSV(tsNum),
+        escapeCSV(status.charAt(0).toUpperCase() + status.slice(1)), // Capitalize status
         escapeCSV(date),
         escapeCSV(doneBy),
         escapeCSV(remarks)
@@ -1148,9 +1150,8 @@ function exportToCSV() {
       csv += row.join(',') + '\n';
     }
     
-    // Add a blank row to visually separate each record 
-    // (simulating separate "sheets" in a single table view)
-    csv += ',,,,\n';
+    // Add a blank row to visually separate each record
+    csv += ',,,,, \n';
   });
 
   // 4. Trigger the download
@@ -1158,7 +1159,6 @@ function exportToCSV() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   
-  // Format filename with current date
   const dateStr = new Date().toISOString().slice(0, 10);
   link.setAttribute('href', url);
   link.setAttribute('download', `FHS_Tracker_Export_${dateStr}.csv`);
