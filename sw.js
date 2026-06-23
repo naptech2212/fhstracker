@@ -1,6 +1,11 @@
-// Fleet Compliance Tracker — Service Worker v1.0
-const CACHE = 'fct-v1';
-const ASSETS = ['./', './index.html', './manifest.json'];
+// Fleet Compliance Tracker — Service Worker v2.0
+const CACHE = 'fct-v2'; // Bumped version to invalidate old cache
+const ASSETS = [
+  './', 
+  './index.html', 
+  './manifest.json',
+  './FHS.png' // Added new icon to offline assets
+];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
