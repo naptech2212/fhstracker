@@ -651,8 +651,8 @@ db.collection("appData").doc("mainStore").onSnapshot((doc) => {
       }
     }
   } else {
-    // If database is empty, create the first save
-    save();
+    // 🔥 FIX: Do not auto-save here! Just log a warning.
+    console.warn("Database doc missing. If this is a new setup, manually trigger a save.");
   }
 }, (err) => {
   console.error("Real-time sync error:", err);
