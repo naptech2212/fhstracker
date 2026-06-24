@@ -410,10 +410,16 @@
     
     <div class="content">
 
-      <div class="panel active" id="panel-dashboard">
+    <div class="panel active" id="panel-dashboard">
         <div class="panel-title">Dashboard</div>
         <div class="panel-sub">Fleet/HECP/SECP progress overview</div>
         <div class="stats-grid" id="stat-cards"></div>
+        
+        <!-- NEW Search Bar -->
+        <div style="margin-bottom: 1.5rem; max-width: 400px;">
+          <input type="text" id="dash-search" placeholder="Search records by reference or desc..." oninput="renderDashboard()" style="width:100%; padding:.65rem .9rem; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-pri); outline:none; font-family:var(--sans); font-size:.9rem; transition:border-color .2s;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+
         <div class="panel-title" style="font-size:1rem;margin-bottom:1rem">Active Records</div>
         <div class="records-list" id="dash-records"></div>
       </div>
@@ -728,7 +734,7 @@ function setupRoleUI(){
   
   // Desktop Nav Toggles
   document.getElementById('nav-create').style.display   = r==='superadmin' ? 'flex':'none';
-  document.getElementById('nav-checks').style.display   = r==='admin'      ? 'flex':'none';
+  document.getElementById('nav-checks').style.display   = (r==='admin' || r==='viewer') ? 'flex':'none';
   document.getElementById('nav-settings').style.display = r==='superadmin' ? 'flex':'none';
   document.getElementById('nav-audit').style.display    = r==='superadmin' ? 'flex':'none'; // Hides Desktop Audit
   document.getElementById('th-actions').style.display   = r==='superadmin' ? ''    :'none';
@@ -736,7 +742,7 @@ function setupRoleUI(){
   
   // Mobile Nav Toggles
   document.getElementById('bnav-create').style.display   = r==='superadmin' ? 'flex':'none';
-  document.getElementById('bnav-checks').style.display   = r==='admin'      ? 'flex':'none';
+  document.getElementById('bnav-checks').style.display   = (r==='admin' || r==='viewer') ? 'flex':'none';
   document.getElementById('bnav-settings').style.display = r==='superadmin' ? 'flex':'none';
   document.getElementById('bnav-audit').style.display    = r==='superadmin' ? 'flex':'none'; // Hides Mobile Audit
 }
@@ -942,12 +948,18 @@ function renderDashboard(){
     return; 
   }
   
+  const searchInput = document.getElementById('dash-search');
+  const searchVal = searchInput ? searchInput.value.toLowerCase() : '';
+
   const categories = ['HECP', 'SECP', 'FLEET'];
   let dashboardHtml = '';
 
   // Generate boxes for each category
   categories.forEach(cat => {
-    const catRecords = records.filter(r => r.type === cat);
+    const catRecords = records.filter(r => 
+      r.type === cat && 
+      (r.ref.toLowerCase().includes(searchVal) || r.desc.toLowerCase().includes(searchVal))
+    );
     
     let completed = [];
     let inProgress = [];
@@ -1177,12 +1189,14 @@ function exportToCSV() {
 // ════════════════════════════════════════════════
 function renderChecks(){
   const container = document.getElementById('checks-list');
-  
-  // Remember which accordions are open
   const openAccordions = Array.from(document.querySelectorAll('.check-record-body.open')).map(el => el.id);
 
   if(!records.length){ container.innerHTML=`<div class="empty-state"><div class="icon">📋</div><p>No records available. Ask Super Admin to create records first.</p></div>`; return; }
   
+  // NEW: Check if current user is a viewer
+  const isViewer = currentUser && currentUser.role === 'viewer';
+  const disabledAttr = isViewer ? 'disabled' : '';
+
   container.innerHTML = records.map((r,ri)=>{
     const applicable=['DA','DB','TA'].filter(k=>r.applicable[k]);
     const {pct}=calcProgress(r);
@@ -1190,9 +1204,9 @@ function renderChecks(){
       
       const checks=applicable.map(c=>{
         const checked=r.checks[ti]&&r.checks[ti][c]?'checked':'';
-        // Removed the onchange handler to prevent auto-saving
+        // NEW: Apply disabled attribute if viewer
         return `<div class="check-item">
-          <input type="checkbox" id="chk-${ri}-${ti}-${c}" ${checked}>
+          <input type="checkbox" id="chk-${ri}-${ti}-${c}" ${checked} ${disabledAttr}>
           <label for="chk-${ri}-${ti}-${c}">${c}</label>
         </div>`;
       }).join('');
@@ -1202,30 +1216,37 @@ function renderChecks(){
       const existingEmp=(r.checks[ti]&&r.checks[ti]['empId'])?r.checks[ti]['empId']:'';
       const existingDate=(r.checks[ti]&&r.checks[ti]['date'])?r.checks[ti]['date']:'';
       
+      // NEW: Removed individual Save button & applied disabledAttr to inputs
       return `<div class="ts-check-row" style="flex-wrap:wrap;gap:.5rem">
         <span class="ts-check-label">Train Set ${ti+1} <span class="ts-chip ${s}" style="margin-left:.5rem">TS${ti+1}</span></span>
         <div class="ts-checks">${checks}</div>
         <div style="display:flex;align-items:center;gap:.5rem;width:100%;margin-top:.35rem;flex-wrap:wrap;">
           
-          <input type="text" id="emp-${ri}-${ti}" value="${esc(existingEmp)}" placeholder="Emp ID"
-            style="width:90px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;"
+          <input type="text" id="emp-${ri}-${ti}" value="${esc(existingEmp)}" placeholder="Emp ID" ${disabledAttr}
+            style="width:90px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
             onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
             
-          <input type="date" id="date-${ri}-${ti}" value="${esc(existingDate)}"
-            style="width:125px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;color-scheme:dark;"
+          <input type="date" id="date-${ri}-${ti}" value="${esc(existingDate)}" ${disabledAttr}
+            style="width:125px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;color-scheme:dark; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
             onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
             
-          <input type="text" id="rmk-${ri}-${ti}" value="${esc(existingRemark)}" placeholder="Remarks…"
-            style="flex:1;min-width:150px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;"
+          <input type="text" id="rmk-${ri}-${ti}" value="${esc(existingRemark)}" placeholder="Remarks…" ${disabledAttr}
+            style="flex:1;min-width:150px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
             onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-            
-          <button onclick="saveTrainSetData(${ri},${ti})"
-            style="padding:.32rem .75rem;background:var(--accent);border:none;border-radius:var(--radius);color:#060E1C;font-size:.75rem;font-weight:700;cursor:pointer;font-family:var(--sans);white-space:nowrap">Save</button>
             
         </div>
       </div>`;
     }).join('');
+    
     const fc=pct===100?'success':pct>0?'warn':'';
+    
+    // NEW: Single Save Record Button (Hidden for viewers)
+    const saveAllBtn = isViewer ? '' : `
+      <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
+        <button onclick="saveRecordChecks(${ri})" class="btn-save" style="padding: .6rem 1.5rem; white-space: nowrap;">Save Complete Record</button>
+      </div>
+    `;
+
     return `<div class="check-record">
       <div class="check-record-header" onclick="toggleAccordion(${ri})">
         <div style="display:flex;align-items:center;gap:.75rem;flex:1;min-width:0">
@@ -1243,12 +1264,12 @@ function renderChecks(){
         <div class="trainset-section">
           <div class="ts-header">Train Sets — Check applicable cars</div>
           ${tsRows}
+          ${saveAllBtn}
         </div>
       </div>
     </div>`;
   }).join('');
 
-  // Re-open previously open accordions
   openAccordions.forEach(id => {
     const body = document.getElementById(id);
     if (body) body.classList.add('open');
@@ -1263,18 +1284,43 @@ function toggleAccordion(ri){
   document.getElementById('chevron-'+ri).classList.toggle('open');
 }
 
-function saveTrainSetData(ri, ti) {
+function saveRecordChecks(ri) {
   const rec = records[ri];
-  if(!rec.checks[ti]) rec.checks[ti] = {};
-
-  // 1. Read & save checkbox states
   const applicable = ['DA','DB','TA'].filter(k=>rec.applicable[k]);
-  applicable.forEach(c => {
-    const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
-    if (cb) {
-      rec.checks[ti][c] = cb.checked;
+
+  // Loop through all trainsets for this record and grab the latest DOM data
+  for(let ti=0; ti<rec.trainSets; ti++) {
+    if(!rec.checks[ti]) rec.checks[ti] = {};
+
+    const empEl = document.getElementById(`emp-${ri}-${ti}`);
+    if (empEl) {
+      // Read & save input fields
+      rec.checks[ti]['empId'] = empEl.value.trim();
+      rec.checks[ti]['date'] = document.getElementById(`date-${ri}-${ti}`).value.trim();
+      rec.checks[ti]['remark'] = document.getElementById(`rmk-${ri}-${ti}`).value.trim();
+
+      // Read & save checkbox states
+      applicable.forEach(c => {
+        const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
+        if (cb) {
+          rec.checks[ti][c] = cb.checked;
+        }
+      });
     }
-  });
+  }
+
+  addAudit(`Bulk updated checks & details for ${rec.ref}`);
+  save();
+
+  const {pct} = calcProgress(rec);
+  if (pct === 100) {
+    showToast(`${rec.ref} — 100% complete! ✓`);
+  } else {
+    showToast(`Complete record for ${rec.ref} saved successfully`);
+  }
+
+  renderChecks();
+}
 
   // 2. Read & save input fields
   rec.checks[ti]['empId'] = document.getElementById(`emp-${ri}-${ti}`).value.trim();
