@@ -1423,9 +1423,15 @@ function downloadBackup() {
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToBackup, null, 2));
   const downloadAnchorNode = document.createElement('a');
   
-  const dateStr = new Date().toISOString().slice(0, 10);
+  // --- UPDATED: Date first, then time stamp ---
+  const now = new Date();
+  const datePart = now.toISOString().slice(0, 10); // e.g., 2024-05-24
+  const timePart = now.toTimeString().slice(0, 8).replace(/:/g, '-'); // e.g., 14-30-05
+  const dateTimeStr = `${datePart}_${timePart}`; 
+  
   downloadAnchorNode.setAttribute("href", dataStr);
-  downloadAnchorNode.setAttribute("download", `FHS_Database_Backup_${dateStr}.json`);
+  downloadAnchorNode.setAttribute("download", `FHS_Database_Backup_${dateTimeStr}.json`);
+  // ---------------------------------------------
   
   document.body.appendChild(downloadAnchorNode); // Required for Firefox
   downloadAnchorNode.click();
@@ -1434,7 +1440,7 @@ function downloadBackup() {
   addAudit('Downloaded full database backup');
   showToast('Backup downloaded successfully');
 }
-
+  
 function restoreBackup(event) {
   const file = event.target.files[0];
   if (!file) return;
