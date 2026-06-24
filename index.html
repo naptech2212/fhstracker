@@ -1321,27 +1321,7 @@ function saveRecordChecks(ri) {
 
   renderChecks();
 }
-
-  // 2. Read & save input fields
-  rec.checks[ti]['empId'] = document.getElementById(`emp-${ri}-${ti}`).value.trim();
-  rec.checks[ti]['date'] = document.getElementById(`date-${ri}-${ti}`).value.trim();
-  rec.checks[ti]['remark'] = document.getElementById(`rmk-${ri}-${ti}`).value.trim();
-
-  addAudit(`Updated TS${ti+1} checks & details for ${rec.ref}`);
-  save();
-
-  // 3. Check progress for success messaging
-  const {pct} = calcProgress(rec);
-  if (pct === 100) {
-    showToast(`${rec.ref} — 100% complete! ✓`);
-  } else {
-    showToast(`Train Set ${ti+1} saved`);
-  }
-
-  // 4. Re-render the panel to update progress bars and statuses
-  renderChecks();
-}
-
+  
 // ════════════════════════════════════════════════
 //  SETTINGS — PASSWORD MANAGEMENT (Super Admin)
 // ════════════════════════════════════════════════
