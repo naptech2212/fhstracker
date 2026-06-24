@@ -611,6 +611,19 @@
 //  FIREBASE DATA STORE (Real-Time Sync)
 // ════════════════════════════════════════════════
 
+const firebaseConfig = {
+  apiKey: "AIzaSyB1I1iN5n2TAmqg0eKT3Z5yjtBA6fpjp40",
+  authDomain: "fleet-tracker-d442c.firebaseapp.com",
+  projectId: "fleet-tracker-d442c",
+  storageBucket: "fleet-tracker-d442c.firebasestorage.app",
+  messagingSenderId: "315598515523",
+  appId: "1:315598515523:web:e83983487523447af3d3f6"
+};
+
+// Initialize Firebase using the Compat SDK
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore(); 
+  
 const DEFAULT_PASSWORDS = { superadmin:'admin123', admin:'admin123', viewer:'viewer123' };
 const DEFAULT_USERS = {
   superadmin: { role:'superadmin', label:'Super Admin' },
@@ -623,8 +636,8 @@ let passwords   = { ...DEFAULT_PASSWORDS };
 let currentUser = JSON.parse(localStorage.getItem('fct_session')) || null;
 let records     = [];
 let auditLog    = [];
-let tsCount     = 4;
-let editTsCount = 4;
+let tsCount     = 57;
+let editTsCount = 57;
 let editIndex   = -1;
 let dbReady     = false;   // ← NEW: guard flag
 
