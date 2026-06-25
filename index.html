@@ -640,34 +640,32 @@ let tsCount     = 57;
 let editTsCount = 57;
 let editIndex   = -1;
 let dbReady     = false;   // ← NEW: guard flag
+let lastKnownTimestamp = null;
 
 // ⚡ REAL-TIME SYNC
 db.collection("appData").doc("mainStore").onSnapshot((doc) => {
   if (doc.exists) {
     const data = doc.data();
-    userMeta  = data.users     || { ...DEFAULT_USERS };
-    passwords = data.passwords || { ...DEFAULT_PASSWORDS };
-    records   = data.records   || [];
-    auditLog  = data.audit     || [];
-    dbReady   = true;   // ← Mark as safe to save
-
+    userMeta   = data.users      || { ...DEFAULT_USERS };
+    passwords  = data.passwords  || { ...DEFAULT_PASSWORDS };
+    records    = data.records    || [];
+    auditLog   = data.audit      || [];
+    lastKnownTimestamp = data._lastUpdated || null;
+    dbReady    = true;                              
     if (currentUser) {
       const activePanel = document.querySelector('.panel.active');
-      if (activePanel) {
-        showPanel(activePanel.id.replace('panel-', ''));
-      }
+      if (activePanel) showPanel(activePanel.id.replace('panel-', ''));
     }
   } else {
-    // Doc doesn't exist yet — seed it ONCE with defaults, then mark ready
     if (!dbReady) {
       db.collection("appData").doc("mainStore").set({
-        users:     DEFAULT_USERS,
-        passwords: DEFAULT_PASSWORDS,
-        records:   [],
-        audit:     []
+        users:        { ...DEFAULT_USERS },
+        passwords:    { ...DEFAULT_PASSWORDS },
+        records:      [],
+        audit:        [],
+        _lastUpdated: Date.now()
       }).then(() => {
         dbReady = true;
-        console.log("Firebase seeded with defaults.");
       }).catch(err => console.error("Seed failed:", err));
     }
   }
@@ -676,16 +674,30 @@ db.collection("appData").doc("mainStore").onSnapshot((doc) => {
   showToast("Network error connecting to live database", "err");
 });
 
-function save() {
-  if (!dbReady) {
+function save(){
+  if (!dbReady) {                          // ✅ FIX 1 — block premature saves
     console.warn("Save blocked — DB not ready yet.");
     return;
   }
+  const now = Date.now();
+  if (lastKnownTimestamp) {                // ✅ FIX 3 — conflict check
+    db.collection("appData").doc("mainStore").get().then(doc => {
+      if (doc.exists) {
+        const serverTs = doc.data()._lastUpdated || 0;
+        if (serverTs > lastKnownTimestamp + 2000) {
+          showToast("⚠ Data was updated by another user — your save overwrote it", "err");
+        }
+      }
+    }).catch(() => {});
+  }
   db.collection("appData").doc("mainStore").set({
-    users:     userMeta,
-    passwords: passwords,
-    records:   records,
-    audit:     auditLog
+    users:        userMeta,
+    passwords:    passwords,
+    records:      records,
+    audit:        auditLog,
+    _lastUpdated: now                      // ✅ FIX 3 — write timestamp
+  }).then(() => {
+    lastKnownTimestamp = now;
   }).catch(err => {
     console.error("Error saving to Firebase:", err);
     showToast("Failed to save to cloud", "err");
@@ -724,6 +736,33 @@ function doLogin(){
   document.getElementById('page-app').classList.add('active');
   setupRoleUI();
   showPanel('dashboard');
+
+  // ✅ FIX 2 — Auto-backup once per day for superadmin
+  if (currentUser.role === 'superadmin') {
+    const today = new Date().toISOString().slice(0, 10);
+    const lastBackup = localStorage.getItem('fct_last_auto_backup');
+    if (lastBackup !== today) {
+      setTimeout(() => { autoBackup(today); }, 2000);
+    }
+  }
+}
+
+// ✅ FIX 2 — New function
+function autoBackup(dateStr) {
+  const dataToBackup = {
+    users: userMeta, passwords: passwords,
+    records: records, audit: auditLog
+  };
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToBackup, null, 2));
+  const a = document.createElement('a');
+  a.setAttribute('href', dataStr);
+  a.setAttribute('download', `FHS_AutoBackup_${dateStr}.json`);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  localStorage.setItem('fct_last_auto_backup', dateStr);
+  showToast('Auto-backup downloaded for today ✓');
+  addAudit('Auto-backup triggered on login');
 }
 
 function doLogout(){
