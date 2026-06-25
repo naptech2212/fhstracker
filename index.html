@@ -1324,19 +1324,36 @@ function exportToCSV() {
 }
 
 // ════════════════════════════════════════════════
-//  ✅ FIX 9: EXPORT TO XLSX
+//  ✅ FIX 9: EXPORT TO XLSX (Patched for Unique Sheet Names)
 // ════════════════════════════════════════════════
 function exportToXLSX() {
-  if (!records || records.length === 0) { showToast('No records to export', 'err'); return; }
+  if (!records || records.length === 0) { 
+    showToast('No records to export', 'err'); 
+    return; 
+  }
+  
   const wb = XLSX.utils.book_new();
 
-  records.forEach(r => {
+  records.forEach((r, index) => {
     const { pct } = calcProgress(r);
-    const sheetName = r.ref.replace(/[:\\\/\?\*\[\]]/g, '-').slice(0, 31);
+    
+    // 1. Sanitize the sheet name (Excel limits to 31 chars and no special chars)
+    let safeRef = (r.ref || `Record_${index + 1}`).replace(/[:\\\/\?\*\[\]]/g, '-').trim();
+    let sheetName = safeRef.slice(0, 28); 
+    
+    // 2. Ensure sheet name is UNIQUE and doesn't conflict with "Summary"
+    let counter = 1;
+    let finalSheetName = sheetName;
+    while (wb.SheetNames.includes(finalSheetName) || finalSheetName.toLowerCase() === 'summary') {
+      finalSheetName = `${sheetName.slice(0, 25)}_${counter}`;
+      counter++;
+    }
+
     const rows = [];
     rows.push([r.type, r.ref, r.desc, `Progress: ${pct}%`]);
     rows.push([]);
     rows.push(['Train Set', 'Status', 'DA', 'DB', 'TA', 'Date', 'Emp ID', 'Remarks']);
+    
     for (let i = 0; i < r.trainSets; i++) {
       const cd = r.checks[i] || {};
       const s = tsStatus(r, i);
@@ -1351,9 +1368,12 @@ function exportToXLSX() {
         cd.remark || ''
       ]);
     }
+    
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws['!cols'] = [{wch:10},{wch:10},{wch:6},{wch:6},{wch:6},{wch:13},{wch:10},{wch:30}];
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    
+    // Add the uniquely named sheet
+    XLSX.utils.book_append_sheet(wb, ws, finalSheetName);
   });
 
   // Summary sheet
@@ -1366,20 +1386,25 @@ function exportToXLSX() {
   summaryWs['!cols'] = [{wch:8},{wch:20},{wch:35},{wch:12},{wch:12}];
   XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
 
-  // ✅ Use Blob download instead of XLSX.writeFile (works reliably in PWA/browser)
-  const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const blob = new Blob([wbOut], { type: 'application/octet-stream' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `FHS_Tracker_Export_${new Date().toISOString().slice(0,10)}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  // Trigger download with a try-catch to prevent silent failures
+  try {
+    const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbOut], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `FHS_Tracker_Export_${new Date().toISOString().slice(0,10)}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
 
-  addAudit('Exported records to XLSX');
-  showToast('Excel export successful');
+    addAudit('Exported records to XLSX');
+    showToast('Excel export successful');
+  } catch (err) {
+    console.error("Export failed:", err);
+    showToast('Failed to generate Excel file', 'err');
+  }
 }
 
 // ════════════════════════════════════════════════
