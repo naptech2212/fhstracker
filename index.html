@@ -340,6 +340,24 @@
     .bnav-item.active { color: var(--accent); }
     .bnav-item:hover { color: var(--text-pri); }
   }
+
+  /* ✅ FIX 5: Filter buttons */
+  .cf-btn {
+    padding:.35rem .75rem;background:var(--bg-input);border:1px solid var(--border);
+    border-radius:var(--radius);color:var(--text-sec);font-size:.78rem;font-family:var(--sans);
+    cursor:pointer;transition:all .15s;white-space:nowrap;
+  }
+  .cf-btn:hover { border-color:var(--accent);color:var(--text-pri); }
+  .cf-btn.active { background:var(--accent);border-color:var(--accent);color:#060E1C;font-weight:700; }
+ 
+  /* ✅ FIX 6: Live TS status chip */
+  .ts-live-chip {
+    font-size:.7rem;font-weight:700;padding:.15rem .45rem;border-radius:999px;
+    font-family:var(--mono);margin-left:.4rem;transition:background .2s,color .2s;
+  }
+  .ts-live-chip.done    { background:#0D3B2E;color:var(--success); }
+  .ts-live-chip.partial { background:#3B2D0A;color:var(--warn); }
+  .ts-live-chip.pending { background:var(--bg-deep);color:var(--text-dim); }
 </style>
 
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
@@ -501,12 +519,26 @@
         </div>
       </div>
 
-      <div class="panel" id="panel-checks">
-        <div class="panel-title">Fleet/HECP/SECP Status</div>
-        <div class="panel-sub">Mark completed car checks per train set for each record</div>
-        <div id="checks-list"></div>
-      </div>
-
+  <div class="panel" id="panel-checks">
+  <div class="panel-title">Fleet/HECP/SECP Status</div>
+  <div class="panel-sub">Mark completed car checks per train set for each record</div>
+  <div style="display:flex;flex-wrap:wrap;gap:.6rem;margin-bottom:1rem;align-items:center;">
+    <input type="text" id="checks-search" placeholder="Search reference or description…" oninput="renderChecks()"
+      style="flex:1;min-width:180px;padding:.5rem .8rem;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-family:var(--sans);font-size:.85rem;outline:none;"
+      onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+    <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
+      <button onclick="setChecksFilter('type','')"      id="cf-all"     class="cf-btn active">All</button>
+      <button onclick="setChecksFilter('type','FLEET')" id="cf-fleet"   class="cf-btn">FLEET</button>
+      <button onclick="setChecksFilter('type','HECP')"  id="cf-hecp"    class="cf-btn">HECP</button>
+      <button onclick="setChecksFilter('type','SECP')"  id="cf-secp"    class="cf-btn">SECP</button>
+      <button onclick="setChecksFilter('status','pending')" id="cf-pending" class="cf-btn">Pending</button>
+      <button onclick="setChecksFilter('status','partial')" id="cf-partial" class="cf-btn">Partial</button>
+      <button onclick="setChecksFilter('status','done')"    id="cf-done"    class="cf-btn">Done</button>
+    </div>
+  </div>
+  <div id="checks-list"></div>
+</div>
+      
       <div class="panel" id="panel-audit">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
           <div>
@@ -641,6 +673,7 @@ let editTsCount = 57;
 let editIndex   = -1;
 let dbReady     = false;   // ← NEW: guard flag
 let lastKnownTimestamp = null;
+let isDirty     = false;   // ✅ FIX 4: unsaved changes flag
 
 // ⚡ REAL-TIME SYNC
 db.collection("appData").doc("mainStore").onSnapshot((doc) => {
@@ -804,6 +837,13 @@ function setupRoleUI(){
 //  NAVIGATION
 // ════════════════════════════════════════════════
 function showPanel(id){
+   // ✅ FIX 4: Warn if navigating away from checks with unsaved edits
+  const currentPanel = document.querySelector('.panel.active');
+  const currentId = currentPanel ? currentPanel.id.replace('panel-', '') : '';
+  if (isDirty && currentId === 'checks' && id !== 'checks') {
+    if (!confirm('You have unsaved changes in the Status panel. Leave anyway?')) return;
+    isDirty = false;
+  }
   // 1. Remove active state from all panels
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   
@@ -1240,7 +1280,75 @@ function exportToCSV() {
 // ════════════════════════════════════════════════
 //  ADMIN — COMPLIANCE CHECKS
 // ════════════════════════════════════════════════
-function renderChecks(){
+
+// ════════════════════════════════════════════════
+//  ✅ FIX 5: CHECKS PANEL FILTER STATE
+// ════════════════════════════════════════════════
+let checksFilter = { type: '', status: '' };
+ 
+function setChecksFilter(key, val) {
+  // Toggle off if same button clicked again
+  if (checksFilter[key] === val) { checksFilter[key] = ''; }
+  else { checksFilter[key] = val; }
+  // If filtering by status, clear type and vice versa — unless both are different keys
+  updateFilterButtons();
+  renderChecks();
+}
+ 
+function updateFilterButtons() {
+  const typeMap   = { '':'all', 'FLEET':'fleet', 'HECP':'hecp', 'SECP':'secp' };
+  const statusMap = { '':'', 'pending':'pending', 'partial':'partial', 'done':'done' };
+  ['all','fleet','hecp','secp','pending','partial','done'].forEach(id => {
+    const el = document.getElementById('cf-' + id);
+    if (el) el.classList.remove('active');
+  });
+  const typeId = typeMap[checksFilter.type];
+  if (typeId) { const el = document.getElementById('cf-' + typeId); if (el) el.classList.add('active'); }
+  const statusId = statusMap[checksFilter.status];
+  if (statusId) { const el = document.getElementById('cf-' + statusId); if (el) el.classList.add('active'); }
+  if (!checksFilter.type && !checksFilter.status) {
+    const el = document.getElementById('cf-all'); if (el) el.classList.add('active');
+  }
+}
+ 
+// ════════════════════════════════════════════════
+//  ✅ FIX 6: LIVE TS STATUS CHIP UPDATE
+// ════════════════════════════════════════════════
+function liveUpdateTsChip(ri, ti) {
+  const rec = records[ri];
+  const applicable = ['DA','DB','TA'].filter(k => rec.applicable[k]);
+  const checkedCount = applicable.filter(c => {
+    const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
+    return cb && cb.checked;
+  }).length;
+  let status = 'pending';
+  if (checkedCount === applicable.length) status = 'done';
+  else if (checkedCount > 0) status = 'partial';
+  const chip = document.getElementById(`live-chip-${ri}-${ti}`);
+  if (chip) {
+    chip.className = `ts-live-chip ${status}`;
+    chip.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+  }
+}
+ 
+// ════════════════════════════════════════════════
+//  ✅ FIX 7: AUTO-FILL DATE ON CHECKBOX TICK
+// ════════════════════════════════════════════════
+function autoFillDate(ri, ti) {
+  const dateEl = document.getElementById(`date-${ri}-${ti}`);
+  if (!dateEl || dateEl.value) return; // don't overwrite existing date
+  const applicable = ['DA','DB','TA'].filter(k => records[ri].applicable[k]);
+  const anyChecked = applicable.some(c => {
+    const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
+    return cb && cb.checked;
+  });
+  if (anyChecked) {
+    dateEl.value = new Date().toISOString().slice(0, 10);
+    isDirty = true;
+  }
+}
+  
+  function renderChecks(){
   const container = document.getElementById('checks-list');
   const openAccordions = Array.from(document.querySelectorAll('.check-record-body.open')).map(el => el.id);
 
@@ -1250,7 +1358,26 @@ function renderChecks(){
   const isViewer = currentUser && currentUser.role === 'viewer';
   const disabledAttr = isViewer ? 'disabled' : '';
 
-  container.innerHTML = records.map((r,ri)=>{
+    // ✅ FIX 5: Apply search + type + status filters
+  const searchVal = (document.getElementById('checks-search')?.value || '').toLowerCase();
+  const filteredRecords = records.map((r, ri) => ({ r, ri })).filter(({ r }) => {
+    if (checksFilter.type && r.type !== checksFilter.type) return false;
+    if (searchVal && !r.ref.toLowerCase().includes(searchVal) && !r.desc.toLowerCase().includes(searchVal)) return false;
+    if (checksFilter.status) {
+      const { pct } = calcProgress(r);
+      if (checksFilter.status === 'done'    && pct !== 100) return false;
+      if (checksFilter.status === 'partial' && !(pct > 0 && pct < 100)) return false;
+      if (checksFilter.status === 'pending' && pct !== 0) return false;
+    }
+    return true;
+  });
+ 
+  if (!filteredRecords.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>No records match the current filter.</p></div>`;
+    return;
+  }
+ 
+  container.innerHTML = filteredRecords.map(({ r, ri }) => {
     const applicable=['DA','DB','TA'].filter(k=>r.applicable[k]);
     const {pct}=calcProgress(r);
     const tsRows=Array.from({length:r.trainSets},(_,ti)=>{
@@ -1259,7 +1386,7 @@ function renderChecks(){
         const checked=r.checks[ti]&&r.checks[ti][c]?'checked':'';
         // NEW: Apply disabled attribute if viewer
         return `<div class="check-item">
-          <input type="checkbox" id="chk-${ri}-${ti}-${c}" ${checked} ${disabledAttr}>
+          <input type="checkbox" id="chk-${ri}-${ti}-${c}" ${checked} ${disabledAttr} onchange="isDirty=true;${isViewer ? '' : `liveUpdateTsChip(${ri},${ti});autoFillDate(${ri},${ti});`}">
           <label for="chk-${ri}-${ti}-${c}">${c}</label>
         </div>`;
       }).join('');
@@ -1271,19 +1398,24 @@ function renderChecks(){
       
       // NEW: Removed individual Save button & applied disabledAttr to inputs
       return `<div class="ts-check-row" style="flex-wrap:wrap;gap:.5rem">
-        <span class="ts-check-label">Train Set ${ti+1} <span class="ts-chip ${s}" style="margin-left:.5rem">TS${ti+1}</span></span>
+        <span class="ts-check-label">Train Set ${ti+1} <span class="ts-chip ${s}" style="margin-left:.5rem">TS${ti+1}</span>
+  <span class="ts-live-chip ${s}" id="live-chip-${ri}-${ti}">${s.charAt(0).toUpperCase()+s.slice(1)}</span>
+</span>
         <div class="ts-checks">${checks}</div>
         <div style="display:flex;align-items:center;gap:.5rem;width:100%;margin-top:.35rem;flex-wrap:wrap;">
           
           <input type="text" id="emp-${ri}-${ti}" value="${esc(existingEmp)}" placeholder="Emp ID" ${disabledAttr}
+          oninput="isDirty=true;"
             style="width:90px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
             onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
             
           <input type="date" id="date-${ri}-${ti}" value="${esc(existingDate)}" ${disabledAttr}
+          oninput="isDirty=true;"
             style="width:125px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;color-scheme:dark; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
             onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
             
           <input type="text" id="rmk-${ri}-${ti}" value="${esc(existingRemark)}" placeholder="Remarks…" ${disabledAttr}
+          oninput="isDirty=true;"
             style="flex:1;min-width:150px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
             onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
             
@@ -1364,6 +1496,7 @@ function saveRecordChecks(ri) {
 
   addAudit(`Bulk updated checks & details for ${rec.ref}`);
   save();
+  isDirty = false; // ✅ FIX 4: clear dirty flag after save
 
   const {pct} = calcProgress(rec);
   if (pct === 100) {
