@@ -358,10 +358,33 @@
   .ts-live-chip.done    { background:#0D3B2E;color:var(--success); }
   .ts-live-chip.partial { background:#3B2D0A;color:var(--warn); }
   .ts-live-chip.pending { background:var(--bg-deep);color:var(--text-dim); }
+
+  /* ✅ FIX 9: Export buttons */
+  .export-btn-group { display:flex; gap:.5rem; }
+ 
+  /* ✅ FIX 11: Print styles */
+  @media print {
+    body { background:#fff !important; color:#000 !important; }
+    .print-report { display:block !important; }
+    #app { display:none !important; }
+    .print-page { page-break-after:always; padding:2rem; font-family:sans-serif; }
+    .print-page:last-child { page-break-after:auto; }
+    .print-title { font-size:1.3rem; font-weight:700; margin-bottom:.25rem; }
+    .print-sub   { font-size:.85rem; color:#555; margin-bottom:1rem; }
+    .print-table { width:100%; border-collapse:collapse; font-size:.82rem; }
+    .print-table th { background:#0F1F38; color:#fff; padding:.4rem .6rem; text-align:left; }
+    .print-table td { border:1px solid #ccc; padding:.35rem .6rem; }
+    .print-table tr:nth-child(even) td { background:#f5f5f5; }
+    .s-done    { color:#16a34a; font-weight:700; }
+    .s-partial { color:#d97706; font-weight:700; }
+    .s-pending { color:#999; }
+  }
+  .print-report { display:none; }
 </style>
 
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 </head>
 <body>
@@ -497,6 +520,14 @@
             style="padding:.4rem .8rem; background:transparent; border:1px solid var(--accent); border-radius:var(--radius); color:var(--accent); font-size:.8rem; cursor:pointer; font-family:var(--sans); font-weight:600; transition:all .2s;">
             ↓ Export CSV
           </button>
+          <button onclick="exportToXLSX()"
+            style="padding:.4rem .8rem;background:transparent;border:1px solid var(--success);border-radius:var(--radius);color:var(--success);font-size:.8rem;cursor:pointer;font-family:var(--sans);font-weight:600;">
+            ↓ Excel
+            </button>
+          <button onclick="printReport()"
+            style="padding:.4rem .8rem;background:transparent;border:1px solid var(--text-sec);border-radius:var(--radius);color:var(--text-sec);font-size:.8rem;cursor:pointer;font-family:var(--sans);font-weight:600;">
+            ⎙ Print
+            </button>
         </div>
         <div class="table-wrap">
           <table>
@@ -587,7 +618,7 @@
     </div>
   </div>
 
-</div></div><div class="toast" id="toast"></div>
+</div></div><div class="print-report" id="print-report"></div><div class="toast" id="toast"></div>
 
 <div class="modal-overlay" id="edit-modal">
   <div class="modal">
@@ -1105,11 +1136,26 @@ function renderDashboard(){
       else yetToStart.push(cardHtml);
     });
 
-    // Build the category container
+    // Build the category container — ✅ FIX 10: with summary bar
+    const catTotal = catRecords.length;
+    const catComplete = catRecords.filter(r => calcProgress(r).pct === 100).length;
+    const catPct = catTotal ? Math.round(catComplete / catTotal * 100) : 0;
+    const catPctColor = catPct === 100 ? 'var(--success)' : catPct > 0 ? 'var(--warn)' : 'var(--text-dim)';
+ 
     dashboardHtml += `
       <div class="category-box" style="margin-bottom: 2rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem;">
-        <div class="category-title" style="font-size: 1.2rem; font-weight: 700; color: var(--text-pri); margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.8rem; display: flex; align-items: center; gap: 0.75rem;">
-          <span class="record-type ${cat.toLowerCase()}" style="font-size: 0.9rem; padding: 0.3rem 0.8rem; margin: 0;">${cat}</span> Tracker
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:1rem;border-bottom:1px solid var(--border);padding-bottom:.9rem;">
+          <div style="display:flex;align-items:center;gap:.75rem;">
+            <span class="record-type ${cat.toLowerCase()}" style="font-size:.9rem;padding:.3rem .8rem;margin:0;">${cat}</span>
+            <span style="font-size:1.1rem;font-weight:700;color:var(--text-pri);">Tracker</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+            <span style="font-size:.8rem;color:var(--text-sec);">${catComplete} of ${catTotal} records at 100%</span>
+            <div style="width:120px;height:7px;background:var(--bg-deep);border-radius:999px;overflow:hidden;">
+              <div style="height:100%;width:${catPct}%;background:${catPctColor};border-radius:999px;transition:width .4s;"></div>
+            </div>
+            <span style="font-size:.82rem;font-weight:700;color:${catPctColor};font-family:var(--mono);">${catPct}%</span>
+          </div>
         </div>`;
 
     if (catRecords.length === 0) {
@@ -1275,6 +1321,97 @@ function exportToCSV() {
   
   addAudit('Exported records to CSV');
   showToast('Export successful');
+}
+
+// ════════════════════════════════════════════════
+//  ✅ FIX 9: EXPORT TO XLSX
+// ════════════════════════════════════════════════
+function exportToXLSX() {
+  if (!records || records.length === 0) { showToast('No records to export', 'err'); return; }
+  const wb = XLSX.utils.book_new();
+  const statusColor = { done: 'FF22C55E', partial: 'FFF59E0B', pending: 'FF4A6580' };
+ 
+  records.forEach(r => {
+    const { pct } = calcProgress(r);
+    const sheetName = r.ref.replace(/[:\\\/\?\*\[\]]/g, '-').slice(0, 31);
+    const rows = [];
+    rows.push([r.type, r.ref, r.desc, '', `Progress: ${pct}%`, '', r.completedAt ? `Completed: ${new Date(r.completedAt).toLocaleString()}` : '']);
+    rows.push([]);
+    rows.push(['Train Set', 'Status', 'DA', 'DB', 'TA', 'Date', 'Emp ID', 'Remarks']);
+    for (let i = 0; i < r.trainSets; i++) {
+      const cd = r.checks[i] || {};
+      const s = tsStatus(r, i);
+      rows.push([`TS${i+1}`, s.charAt(0).toUpperCase()+s.slice(1), cd.DA?'✓':'', cd.DB?'✓':'', cd.TA?'✓':'', cd.date||'', cd.empId||'', cd.remark||'']);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:10},{wch:10},{wch:6},{wch:6},{wch:6},{wch:13},{wch:10},{wch:30}];
+    // Bold column headers (row 3)
+    ['A','B','C','D','E','F','G','H'].forEach(col => {
+      const cell = ws[`${col}3`];
+      if (cell) cell.s = { font: { bold: true } };
+    });
+    // Color status column
+    for (let i = 0; i < r.trainSets; i++) {
+      const cellRef = `B${4 + i}`;
+      const s = tsStatus(r, i);
+      if (ws[cellRef]) ws[cellRef].s = { font: { bold: true, color: { rgb: statusColor[s] } } };
+    }
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  });
+ 
+  // Summary sheet
+  const summaryRows = [['Type','Reference','Description','Train Sets','Progress %','Completed At']];
+  records.forEach(r => {
+    const { pct } = calcProgress(r);
+    summaryRows.push([r.type, r.ref, r.desc, r.trainSets, pct, r.completedAt ? new Date(r.completedAt).toLocaleString() : '']);
+  });
+  const summaryWs = XLSX.utils.aoa_to_sheet(summaryRows);
+  summaryWs['!cols'] = [{wch:8},{wch:20},{wch:35},{wch:12},{wch:12},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+ 
+  const dateStr = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `FHS_Tracker_Export_${dateStr}.xlsx`);
+  addAudit('Exported records to XLSX');
+  showToast('Excel export successful');
+}
+
+// ════════════════════════════════════════════════
+//  ✅ FIX 11: PRINT / PDF REPORT
+// ════════════════════════════════════════════════
+function printReport() {
+  if (!records || records.length === 0) { showToast('No records to print', 'err'); return; }
+  const container = document.getElementById('print-report');
+  container.innerHTML = records.map(r => {
+    const { pct } = calcProgress(r);
+    const applicable = ['DA','DB','TA'].filter(k => r.applicable[k]);
+    const headerCols = applicable.map(c => `<th>${c}</th>`).join('');
+    const rows = Array.from({ length: r.trainSets }, (_, i) => {
+      const cd = r.checks[i] || {};
+      const s = tsStatus(r, i);
+      const checkCols = applicable.map(c => `<td style="text-align:center">${cd[c] ? '✓' : '—'}</td>`).join('');
+      return `<tr>
+        <td>TS${i+1}</td>
+        <td class="s-${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</td>
+        ${checkCols}
+        <td>${cd.date||'—'}</td>
+        <td>${cd.empId||'—'}</td>
+        <td>${cd.remark||''}</td>
+      </tr>`;
+    }).join('');
+    const completedLine = r.completedAt ? ` &nbsp;|&nbsp; <strong>Completed:</strong> ${new Date(r.completedAt).toLocaleString()}` : '';
+    return `<div class="print-page">
+      <div class="print-title">${r.type} — ${r.ref}</div>
+      <div class="print-sub">${r.desc}${r.remark ? ` | Remark: ${r.remark}` : ''}</div>
+      <div style="font-size:.82rem;margin-bottom:.75rem;">Progress: <strong>${pct}%</strong> &nbsp;|&nbsp; Train Sets: <strong>${r.trainSets}</strong> &nbsp;|&nbsp; Applicable: <strong>${applicable.join(', ')}</strong>${completedLine}</div>
+      <table class="print-table">
+        <thead><tr><th>TS#</th><th>Status</th>${headerCols}<th>Date</th><th>Emp ID</th><th>Remarks</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="margin-top:1.5rem;font-size:.75rem;color:#999;">Generated: ${new Date().toLocaleString()}</div>
+    </div>`;
+  }).join('');
+  addAudit('Printed compliance report');
+  window.print();
 }
   
 // ════════════════════════════════════════════════
