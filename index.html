@@ -522,7 +522,7 @@
           </button>
           <button onclick="exportToXLSX()"
             style="padding:.4rem .8rem;background:transparent;border:1px solid var(--success);border-radius:var(--radius);color:var(--success);font-size:.8rem;cursor:pointer;font-family:var(--sans);font-weight:600;">
-            ↓ Excel
+            ↓ Export Excel
             </button>
           <button onclick="printReport()"
             style="padding:.4rem .8rem;background:transparent;border:1px solid var(--text-sec);border-radius:var(--radius);color:var(--text-sec);font-size:.8rem;cursor:pointer;font-family:var(--sans);font-weight:600;">
@@ -1329,48 +1329,55 @@ function exportToCSV() {
 function exportToXLSX() {
   if (!records || records.length === 0) { showToast('No records to export', 'err'); return; }
   const wb = XLSX.utils.book_new();
-  const statusColor = { done: 'FF22C55E', partial: 'FFF59E0B', pending: 'FF4A6580' };
- 
+
   records.forEach(r => {
     const { pct } = calcProgress(r);
     const sheetName = r.ref.replace(/[:\\\/\?\*\[\]]/g, '-').slice(0, 31);
     const rows = [];
-    rows.push([r.type, r.ref, r.desc, '', `Progress: ${pct}%`, '', r.completedAt ? `Completed: ${new Date(r.completedAt).toLocaleString()}` : '']);
+    rows.push([r.type, r.ref, r.desc, `Progress: ${pct}%`]);
     rows.push([]);
     rows.push(['Train Set', 'Status', 'DA', 'DB', 'TA', 'Date', 'Emp ID', 'Remarks']);
     for (let i = 0; i < r.trainSets; i++) {
       const cd = r.checks[i] || {};
       const s = tsStatus(r, i);
-      rows.push([`TS${i+1}`, s.charAt(0).toUpperCase()+s.slice(1), cd.DA?'✓':'', cd.DB?'✓':'', cd.TA?'✓':'', cd.date||'', cd.empId||'', cd.remark||'']);
+      rows.push([
+        `TS${i+1}`,
+        s.charAt(0).toUpperCase() + s.slice(1),
+        cd.DA ? 'Yes' : '',
+        cd.DB ? 'Yes' : '',
+        cd.TA ? 'Yes' : '',
+        cd.date || '',
+        cd.empId || '',
+        cd.remark || ''
+      ]);
     }
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws['!cols'] = [{wch:10},{wch:10},{wch:6},{wch:6},{wch:6},{wch:13},{wch:10},{wch:30}];
-    // Bold column headers (row 3)
-    ['A','B','C','D','E','F','G','H'].forEach(col => {
-      const cell = ws[`${col}3`];
-      if (cell) cell.s = { font: { bold: true } };
-    });
-    // Color status column
-    for (let i = 0; i < r.trainSets; i++) {
-      const cellRef = `B${4 + i}`;
-      const s = tsStatus(r, i);
-      if (ws[cellRef]) ws[cellRef].s = { font: { bold: true, color: { rgb: statusColor[s] } } };
-    }
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
   });
- 
+
   // Summary sheet
-  const summaryRows = [['Type','Reference','Description','Train Sets','Progress %','Completed At']];
+  const summaryRows = [['Type', 'Reference', 'Description', 'Train Sets', 'Progress %']];
   records.forEach(r => {
     const { pct } = calcProgress(r);
-    summaryRows.push([r.type, r.ref, r.desc, r.trainSets, pct, r.completedAt ? new Date(r.completedAt).toLocaleString() : '']);
+    summaryRows.push([r.type, r.ref, r.desc, r.trainSets, pct]);
   });
   const summaryWs = XLSX.utils.aoa_to_sheet(summaryRows);
-  summaryWs['!cols'] = [{wch:8},{wch:20},{wch:35},{wch:12},{wch:12},{wch:20}];
+  summaryWs['!cols'] = [{wch:8},{wch:20},{wch:35},{wch:12},{wch:12}];
   XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
- 
-  const dateStr = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `FHS_Tracker_Export_${dateStr}.xlsx`);
+
+  // ✅ Use Blob download instead of XLSX.writeFile (works reliably in PWA/browser)
+  const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbOut], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `FHS_Tracker_Export_${new Date().toISOString().slice(0,10)}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+
   addAudit('Exported records to XLSX');
   showToast('Excel export successful');
 }
