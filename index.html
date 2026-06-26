@@ -380,6 +380,20 @@
     .s-pending { color:#999; }
   }
   .print-report { display:none; }
+
+/* Donut charts */
+.donut-row {
+  display:flex;gap:1.5rem;margin-bottom:1.25rem;flex-wrap:wrap;
+}
+.donut-card {
+  display:flex;align-items:center;gap:1rem;background:var(--bg-deep);
+  border:1px solid var(--border);border-radius:var(--radius-lg);padding:.85rem 1.1rem;flex:1;min-width:160px;
+}
+.donut-legend { display:flex;flex-direction:column;gap:.3rem; }
+.donut-legend-item { display:flex;align-items:center;gap:.45rem;font-size:.75rem;color:var(--text-sec); }
+.donut-legend-dot { width:9px;height:9px;border-radius:50%;flex-shrink:0; }
+.donut-label { font-size:.7rem;font-weight:700;color:var(--text-dim);letter-spacing:.07em;margin-bottom:.2rem; }
+.donut-count { font-size:1.1rem;font-weight:700;color:var(--text-pri);font-family:var(--mono); }
 </style>
 
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
@@ -461,6 +475,7 @@
           <input type="text" id="dash-search" placeholder="Search records by reference or desc..." oninput="renderDashboard()" style="width:100%; padding:.65rem .9rem; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-pri); outline:none; font-family:var(--sans); font-size:.9rem; transition:border-color .2s;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
         </div>
 
+        <div id="dash-donuts" style="margin-bottom:1.25rem;"></div>  
         <div class="panel-title" style="font-size:1rem;margin-bottom:1rem">Active Records</div>
         <div class="records-list" id="dash-records"></div>
       </div>
@@ -1045,7 +1060,61 @@ function saveRecordRemark(ri){
 // ════════════════════════════════════════════════
 //  DASHBOARD
 // ════════════════════════════════════════════════
-function renderDashboard(){
+function renderDonutRow() {
+  const categories = ['FLEET', 'HECP', 'SECP'];
+  const colors = { done: '#22C55E', partial: '#F59E0B', pending: '#4A6580' };
+
+  return `<div class="donut-row">${categories.map(cat => {
+    const catRecs = records.filter(r => r.type === cat);
+    const done    = catRecs.filter(r => calcProgress(r).pct === 100).length;
+    const partial = catRecs.filter(r => { const p = calcProgress(r).pct; return p > 0 && p < 100; }).length;
+    const pending = catRecs.length - done - partial;
+    const total   = catRecs.length || 1;
+
+    // SVG donut values
+    const size = 64, r = 24, cx = 32, cy = 32;
+    const circ = 2 * Math.PI * r;
+    const doneArc    = (done    / total) * circ;
+    const partialArc = (partial / total) * circ;
+    const pendingArc = (pending / total) * circ;
+
+    // Each arc starts where the previous ends (offset via strokeDashoffset)
+    const doneOffset    = circ / 4;                        // start at top (90deg)
+    const partialOffset = doneOffset    - doneArc;
+    const pendingOffset = partialOffset - partialArc;
+
+    const pct = catRecs.length ? Math.round((done / catRecs.length) * 100) : 0;
+
+    const arc = (color, dashLen, offset) => dashLen < 0.01 ? '' :
+      `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}"
+        stroke-width="8" stroke-dasharray="${dashLen} ${circ - dashLen}"
+        stroke-dashoffset="${offset}" style="transition:all .5s;"/>`;
+
+    return `<div class="donut-card">
+      <svg width="${size}" height="${size}" style="flex-shrink:0;transform:rotate(-90deg)">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--bg-input)" stroke-width="8"/>
+        ${arc(colors.done,    doneArc,    doneOffset)}
+        ${arc(colors.partial, partialArc, partialOffset)}
+        ${arc(colors.pending, pendingArc, pendingOffset)}
+        <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central"
+          style="font-size:11px;font-weight:700;fill:var(--text-pri);transform:rotate(90deg);transform-origin:${cx}px ${cy}px;font-family:var(--mono)">
+          ${pct}%
+        </text>
+      </svg>
+      <div>
+        <div class="donut-label">${cat}</div>
+        <div class="donut-count">${catRecs.length} records</div>
+        <div class="donut-legend">
+          <div class="donut-legend-item"><span class="donut-legend-dot" style="background:${colors.done}"></span>Done ${done}</div>
+          <div class="donut-legend-item"><span class="donut-legend-dot" style="background:${colors.partial}"></span>Partial ${partial}</div>
+          <div class="donut-legend-item"><span class="donut-legend-dot" style="background:${colors.pending}"></span>Pending ${pending}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+  
+  function renderDashboard(){
   const total = records.length;
   let sumPct = 0, complete = 0;
   
@@ -1065,7 +1134,8 @@ function renderDashboard(){
     <div class="stat-card warn"><div class="stat-label">Avg Progress</div><div class="stat-value warn">${avg}%</div><div class="stat-sub">overall completion</div></div>
     <div class="stat-card purple"><div class="stat-label">In Progress</div><div class="stat-value purple">${total-complete}</div><div class="stat-sub">pending full completion</div></div>`;
     
-  const list = document.getElementById('dash-records');
+  document.getElementById('dash-donuts').innerHTML = renderDonutRow();
+const list = document.getElementById('dash-records');
   
   if(!records.length){ 
     list.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>No records yet. Super Admin can create the first one.</p></div>`; 
