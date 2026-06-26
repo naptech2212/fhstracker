@@ -472,7 +472,7 @@
         
         <!-- NEW Search Bar -->
         <div style="margin-bottom: 1.5rem; max-width: 400px;">
-          <input type="text" id="dash-search" placeholder="Search records by reference or desc..." oninput="renderDashboard()" style="width:100%; padding:.65rem .9rem; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-pri); outline:none; font-family:var(--sans); font-size:.9rem; transition:border-color .2s;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          <input type="text" id="dash-search" placeholder="Search records by reference or description" oninput="debouncedDashboard()" style="width:100%; padding:.65rem .9rem; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-pri); outline:none; font-family:var(--sans); font-size:.9rem; transition:border-color .2s;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
         </div>
 
         <div id="dash-donuts" style="margin-bottom:1.25rem;"></div>  
@@ -569,7 +569,7 @@
   <div class="panel-title">Fleet/HECP/SECP Status</div>
   <div class="panel-sub">Mark completed car checks per train set for each record</div>
   <div style="display:flex;flex-wrap:wrap;gap:.6rem;margin-bottom:1rem;align-items:center;">
-    <input type="text" id="checks-search" placeholder="Search reference or description…" oninput="renderChecks()"
+    <input type="text" id="checks-search" placeholder="Search reference or description" oninput="debouncedChecks()"
       style="flex:1;min-width:180px;padding:.5rem .8rem;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-family:var(--sans);font-size:.85rem;outline:none;"
       onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
     <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
@@ -852,6 +852,17 @@ function esc(str) {
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m];
   });
 }
+
+// ✅ DEBOUNCE — prevents search from re-rendering on every keystroke
+function debounce(fn, delay) {
+  let timer;
+  return function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+const debouncedDashboard = debounce(renderDashboard, 300);
+const debouncedChecks    = debounce(renderChecks, 300);
 
 // ════════════════════════════════════════════════
 //  AUTH
