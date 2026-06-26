@@ -394,6 +394,14 @@
 .donut-legend-dot { width:9px;height:9px;border-radius:50%;flex-shrink:0; }
 .donut-label { font-size:.7rem;font-weight:700;color:var(--text-dim);letter-spacing:.07em;margin-bottom:.2rem; }
 .donut-count { font-size:1.1rem;font-weight:700;color:var(--text-pri);font-family:var(--mono); }
+
+.ts-chips-wrap { display:none; margin-top:.6rem; }
+.ts-chips-wrap.expanded { display:block; }
+.chips-toggle {
+  font-size:.72rem;color:var(--accent);background:none;border:none;
+  cursor:pointer;padding:0;font-family:var(--sans);margin-top:.5rem;
+  text-decoration:underline;text-underline-offset:2px;
+}
 </style>
 
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
@@ -864,6 +872,12 @@ function debounce(fn, delay) {
 const debouncedDashboard = debounce(renderDashboard, 300);
 const debouncedChecks    = debounce(renderChecks, 300);
 
+function toggleChips(id, btn) {
+  const el = document.getElementById(id);
+  const expanded = el.classList.toggle('expanded');
+  btn.textContent = expanded ? '▲ Hide TS' : '▼ Show TS';
+}
+
 // ════════════════════════════════════════════════
 //  AUTH
 // ════════════════════════════════════════════════
@@ -1241,30 +1255,32 @@ const list = document.getElementById('dash-records');
       const fc = pct === 100 ? 'success' : pct > 0 ? 'warn' : '';
       
       // Card template[cite: 1]
-      const cardHtml = `<div class="record-card">
-        <div class="record-header">
-          <div class="record-meta">
-            <div><span class="record-type ${r.type.toLowerCase()}">${r.type}</span></div>
-            <div class="record-ref">${esc(r.ref)}</div>
-            <div class="record-desc">${esc(r.desc)}</div>
-            <div class="applicable-tags" style="margin-top:.5rem">${appTags}</div>
-          </div>
-          <div class="record-pct">${pct}%</div>
-        </div>
-        <div class="progress-bar-wrap">
-          <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--text-dim);margin-bottom:.15rem">
-            <span>${done} of ${t} checks completed</span><span>${r.trainSets} train sets</span>
-          </div>
-          
-          <div style="display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:.4rem;font-family:var(--mono);">
-            <span style="color:#FFFFFF;">${tsDoneCount} Fully Completed</span>
-            <span style="color:var(--warn);">${tsPartialCount} Partially Completed</span>
-          </div>
-          
-          <div class="progress-bar-track"><div class="progress-bar-fill ${fc}" style="width:${pct}%"></div></div>
-        </div>
-        <div class="trainset-chips">${chips}</div>
-      </div>`;
+      const cardId = `chips-${ri}`;
+const cardHtml = `<div class="record-card">
+  <div class="record-header">
+    <div class="record-meta">
+      <div><span class="record-type ${r.type.toLowerCase()}">${r.type}</span></div>
+      <div class="record-ref">${esc(r.ref)}</div>
+      <div class="record-desc">${esc(r.desc)}</div>
+      <div class="applicable-tags" style="margin-top:.5rem">${appTags}</div>
+    </div>
+    <div class="record-pct">${pct}%</div>
+  </div>
+  <div class="progress-bar-wrap">
+    <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--text-dim);margin-bottom:.15rem">
+      <span>${done} of ${t} checks completed</span><span>${r.trainSets} train sets</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:.4rem;font-family:var(--mono);">
+      <span style="color:#FFFFFF;">${tsDoneCount} Fully Completed</span>
+      <span style="color:var(--warn);">${tsPartialCount} Partially Completed</span>
+    </div>
+    <div class="progress-bar-track"><div class="progress-bar-fill ${fc}" style="width:${pct}%"></div></div>
+  </div>
+  <button class="chips-toggle" onclick="toggleChips('${cardId}',this)">▼ Show TS Chips</button>
+  <div class="ts-chips-wrap" id="${cardId}">
+    <div class="trainset-chips">${chips}</div>
+  </div>
+</div>`;
 
       // Group by progress status
       if (pct === 100) completed.push(cardHtml);
