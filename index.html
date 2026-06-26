@@ -921,7 +921,7 @@ function setupRoleUI(){
   
   // Desktop Nav Toggles
   document.getElementById('nav-create').style.display   = r==='superadmin' ? 'flex':'none';
-  document.getElementById('nav-checks').style.display   = (r==='admin' || r==='viewer') ? 'flex':'none';
+  document.getElementById('nav-checks').style.display   = (r==='superadmin' || r==='admin' || r==='viewer') ? 'flex':'none';
   document.getElementById('nav-settings').style.display = r==='superadmin' ? 'flex':'none';
   document.getElementById('nav-audit').style.display    = r==='superadmin' ? 'flex':'none'; // Hides Desktop Audit
   document.getElementById('th-actions').style.display   = r==='superadmin' ? ''    :'none';
@@ -929,7 +929,7 @@ function setupRoleUI(){
   
   // Mobile Nav Toggles
   document.getElementById('bnav-create').style.display   = r==='superadmin' ? 'flex':'none';
-  document.getElementById('bnav-checks').style.display   = (r==='admin' || r==='viewer') ? 'flex':'none';
+  document.getElementById('bnav-checks').style.display   = (r==='superadmin' || r==='admin' || r==='viewer') ? 'flex':'none';
   document.getElementById('bnav-settings').style.display = r==='superadmin' ? 'flex':'none';
   document.getElementById('bnav-audit').style.display    = r==='superadmin' ? 'flex':'none'; // Hides Mobile Audit
 }
