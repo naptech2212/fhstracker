@@ -723,7 +723,14 @@ let isDirty     = false;   // ✅ FIX 4: unsaved changes flag
 let seedScheduled  = false;
 
 // ⚡ REAL-TIME SYNC
-db.collection("appData").doc("mainStore").onSnapshot((doc) => {
+db.collection("appData").doc("mainStore").onSnapshot(
+  { includeMetadataChanges: false },
+  (doc) => {
+    // ✅ Ignore snapshots from local cache — only trust server data
+    if (doc.metadata.fromCache) {
+      console.warn("Snapshot from cache — ignoring to prevent stale data.");
+      return;
+    }
   if (doc.exists) {
     const data = doc.data();
     userMeta   = data.users      || { ...DEFAULT_USERS };
@@ -740,20 +747,40 @@ db.collection("appData").doc("mainStore").onSnapshot((doc) => {
     if (!dbReady && !seedScheduled) {
       seedScheduled = true;
       console.warn("Doc missing — waiting 5s before seeding...");
-      setTimeout(() => {
-        if (dbReady) { seedScheduled = false; return; }
-        console.warn("Seeding Firebase with defaults.");
-        db.collection("appData").doc("mainStore").set({
-          users:        { ...DEFAULT_USERS },
-          passwords:    { ...DEFAULT_PASSWORDS },
-          records:      [],
-          audit:        [],
-          _lastUpdated: Date.now()
-        }).then(() => {
-          dbReady = true;
-          seedScheduled = false;
-        }).catch(err => console.error("Seed failed:", err));
-      }, 5000);
+setTimeout(() => {
+  if (dbReady) { seedScheduled = false; return; }
+  // ✅ Double-check server before seeding — another user may have already saved
+  db.collection("appData").doc("mainStore").get({ source: 'server' }).then(doc => {
+    if (doc.exists) {
+      // Data exists — just load it, don't seed
+      const data = doc.data();
+      userMeta   = data.users     || { ...DEFAULT_USERS };
+      passwords  = data.passwords || { ...DEFAULT_PASSWORDS };
+      records    = Array.isArray(data.records) ? data.records : [];
+      auditLog   = Array.isArray(data.audit)   ? data.audit   : [];
+      lastKnownTimestamp = data._lastUpdated || null;
+      dbReady    = true;
+      seedScheduled = false;
+      console.log("Data recovered from server check.");
+    } else {
+      // Truly doesn't exist — safe to seed
+      console.warn("Seeding Firebase with defaults.");
+      db.collection("appData").doc("mainStore").set({
+        users:        { ...DEFAULT_USERS },
+        passwords:    { ...DEFAULT_PASSWORDS },
+        records:      [],
+        audit:        [],
+        _lastUpdated: Date.now()
+      }).then(() => {
+        dbReady = true;
+        seedScheduled = false;
+      }).catch(err => console.error("Seed failed:", err));
+    }
+  }).catch(err => {
+    console.error("Server check failed:", err);
+    seedScheduled = false;
+  });
+}, 5000);
     }
   }
 }, (err) => {
@@ -1080,8 +1107,8 @@ function renderDonutRow() {
   return `<div class="donut-row">${categories.map(cat => {
     const catRecs = records.filter(r => r.type === cat);
     const done    = catRecs.filter(r => calcProgress(r).pct === 100).length;
-    const partial = catRecs.filter(r => { const p = calcProgress(r).pct; return p > 0 && p < 100; }).length;
-    const pending = catRecs.length - done - partial;
+    const partial = catRecs.filter(r => calcProgress(r).pct > 0 && calcProgress(r).pct < 100).length;
+    const pending = catRecs.filter(r => calcProgress(r).pct === 0).length;
     const total   = catRecs.length || 1;
 
     // SVG donut values
@@ -1118,9 +1145,9 @@ function renderDonutRow() {
         <div class="donut-label">${cat}</div>
         <div class="donut-count">${catRecs.length} records</div>
         <div class="donut-legend">
-          <div class="donut-legend-item"><span class="donut-legend-dot" style="background:${colors.done}"></span>Done ${done}</div>
-          <div class="donut-legend-item"><span class="donut-legend-dot" style="background:${colors.partial}"></span>Partial ${partial}</div>
-          <div class="donut-legend-item"><span class="donut-legend-dot" style="background:${colors.pending}"></span>Pending ${pending}</div>
+        <div class="donut-legend-item"><span class="donut-legend-dot" style="background:${colors.done}"></span>Completed ${done}</div>
+        <div class="donut-legend-item"><span class="donut-legend-dot" style="background:${colors.partial}"></span>In-Progress ${partial}</div>
+        <div class="donut-legend-item"><span class="donut-legend-dot" style="background:${colors.pending}"></span>Yet to Start ${pending}</div>
         </div>
       </div>
     </div>`;
