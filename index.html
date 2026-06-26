@@ -757,7 +757,7 @@ setTimeout(() => {
       userMeta   = data.users     || { ...DEFAULT_USERS };
       passwords  = data.passwords || { ...DEFAULT_PASSWORDS };
       records    = Array.isArray(data.records) ? data.records : [];
-      auditLog   = Array.isArray(data.audit)   ? data.audit   : [];
+      auditLog   = Array.isArray(data.audit) ? [...data.audit].sort((a,b) => new Date(b.time) - new Date(a.time)) : [];
       lastKnownTimestamp = data._lastUpdated || null;
       dbReady    = true;
       seedScheduled = false;
@@ -823,11 +823,26 @@ function save(){
   });
 }
   
-function addAudit(action){
+function addAudit(action) {
   if (!currentUser) return;
-  auditLog.unshift({ time: new Date().toISOString(), user: currentUser.name, role: currentUser.role, action });
-  if(auditLog.length > 200) auditLog = auditLog.slice(0,200);
-  // save() removed — audit flushed on next real save()
+
+  const newEntry = {
+    time: new Date().toISOString(),
+    user: currentUser.name,
+    role: currentUser.role,
+    action
+  };
+
+  // Update local state for UI
+  auditLog.unshift(newEntry);
+  if (auditLog.length > 200) auditLog.pop();
+
+  // Safely push ONLY this entry to server — never touches records/users/passwords
+  if (dbReady) {
+    db.collection("appData").doc("mainStore").update({
+      audit: firebase.firestore.FieldValue.arrayUnion(newEntry)
+    }).catch(err => console.error("Failed to append audit log:", err));
+  }
 }
 
 // Security Helper to prevent XSS
