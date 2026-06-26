@@ -720,6 +720,7 @@ let editIndex   = -1;
 let dbReady     = false;   // ← NEW: guard flag
 let lastKnownTimestamp = null;
 let isDirty     = false;   // ✅ FIX 4: unsaved changes flag
+let seedScheduled  = false;
 
 // ⚡ REAL-TIME SYNC
 db.collection("appData").doc("mainStore").onSnapshot((doc) => {
@@ -736,9 +737,12 @@ db.collection("appData").doc("mainStore").onSnapshot((doc) => {
       if (activePanel) showPanel(activePanel.id.replace('panel-', ''));
     }
 } else {
-    if (!dbReady) {
+    if (!dbReady && !seedScheduled) {
+      seedScheduled = true;
+      console.warn("Doc missing — waiting 5s before seeding...");
       setTimeout(() => {
-        if (dbReady) return;
+        if (dbReady) { seedScheduled = false; return; }
+        console.warn("Seeding Firebase with defaults.");
         db.collection("appData").doc("mainStore").set({
           users:        { ...DEFAULT_USERS },
           passwords:    { ...DEFAULT_PASSWORDS },
@@ -747,8 +751,9 @@ db.collection("appData").doc("mainStore").onSnapshot((doc) => {
           _lastUpdated: Date.now()
         }).then(() => {
           dbReady = true;
+          seedScheduled = false;
         }).catch(err => console.error("Seed failed:", err));
-      }, 3000);
+      }, 5000);
     }
   }
 }, (err) => {
@@ -759,6 +764,11 @@ db.collection("appData").doc("mainStore").onSnapshot((doc) => {
 function save(){
   if (!dbReady) {                          // ✅ FIX 1 — block premature saves
     console.warn("Save blocked — DB not ready yet.");
+    return;
+  }
+   // ✅ Never overwrite existing data with empty records
+  if (records.length === 0 && lastKnownTimestamp) {
+    console.warn("Save blocked — records empty but DB had data previously.");
     return;
   }
   const now = Date.now();
@@ -790,7 +800,7 @@ function addAudit(action){
   if (!currentUser) return;
   auditLog.unshift({ time: new Date().toISOString(), user: currentUser.name, role: currentUser.role, action });
   if(auditLog.length > 200) auditLog = auditLog.slice(0,200);
-  save();
+  // save() removed — audit flushed on next real save()
 }
 
 // Security Helper to prevent XSS
