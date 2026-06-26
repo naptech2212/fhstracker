@@ -735,17 +735,20 @@ db.collection("appData").doc("mainStore").onSnapshot((doc) => {
       const activePanel = document.querySelector('.panel.active');
       if (activePanel) showPanel(activePanel.id.replace('panel-', ''));
     }
-  } else {
+} else {
     if (!dbReady) {
-      db.collection("appData").doc("mainStore").set({
-        users:        { ...DEFAULT_USERS },
-        passwords:    { ...DEFAULT_PASSWORDS },
-        records:      [],
-        audit:        [],
-        _lastUpdated: Date.now()
-      }).then(() => {
-        dbReady = true;
-      }).catch(err => console.error("Seed failed:", err));
+      setTimeout(() => {
+        if (dbReady) return;
+        db.collection("appData").doc("mainStore").set({
+          users:        { ...DEFAULT_USERS },
+          passwords:    { ...DEFAULT_PASSWORDS },
+          records:      [],
+          audit:        [],
+          _lastUpdated: Date.now()
+        }).then(() => {
+          dbReady = true;
+        }).catch(err => console.error("Seed failed:", err));
+      }, 3000);
     }
   }
 }, (err) => {
