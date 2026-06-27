@@ -1014,7 +1014,7 @@ function tsStatus(rec, tsIdx){
   if(!applicable.length) return 'pending';
   const done = applicable.filter(c=>rec.checks[tsIdx]&&rec.checks[tsIdx][c]).length;
   if(done===applicable.length) return 'done';
-  if(done>0) return 'partial';
+  if(done>0 || (rec.checks[tsIdx] && rec.checks[tsIdx]['partial'])) return 'partial';
   return 'pending';
 }
 
@@ -1642,9 +1642,14 @@ function liveUpdateTsChip(ri, ti) {
     const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
     return cb && cb.checked;
   }).length;
+  
+  const partialCb = document.getElementById(`chk-${ri}-${ti}-partial`);
+  const isManualPartial = partialCb && partialCb.checked;
+
   let status = 'pending';
   if (checkedCount === applicable.length) status = 'done';
-  else if (checkedCount > 0) status = 'partial';
+  else if (checkedCount > 0 || isManualPartial) status = 'partial';
+  
   const chip = document.getElementById(`live-chip-${ri}-${ti}`);
   if (chip) {
     chip.className = `ts-live-chip ${status}`;
@@ -1703,7 +1708,7 @@ function autoFillDate(ri, ti) {
     const {pct}=calcProgress(r);
     const tsRows=Array.from({length:r.trainSets},(_,ti)=>{
       
-      const checks=applicable.map(c=>{
+const checks=applicable.map(c=>{
         const checked=r.checks[ti]&&r.checks[ti][c]?'checked':'';
         // NEW: Apply disabled attribute if viewer
         return `<div class="check-item">
@@ -1711,6 +1716,12 @@ function autoFillDate(ri, ti) {
           <label for="chk-${ri}-${ti}-${c}">${c}</label>
         </div>`;
       }).join('');
+      
+      const manualPartialChecked = (r.checks[ti] && r.checks[ti]['partial']) ? 'checked' : '';
+      const manualPartialHtml = `<div class="check-item" style="margin-left:.5rem; padding-left:.5rem; border-left:1px solid var(--border);">
+          <input type="checkbox" id="chk-${ri}-${ti}-partial" ${manualPartialChecked} ${disabledAttr} onchange="isDirty=true;${isViewer ? '' : `liveUpdateTsChip(${ri},${ti});autoFillDate(${ri},${ti});`}">
+          <label for="chk-${ri}-${ti}-partial" style="color:var(--warn)">Partial</label>
+        </div>`;
       
       const s=tsStatus(r,ti);
       const existingRemark=(r.checks[ti]&&r.checks[ti]['remark'])?r.checks[ti]['remark']:'';
@@ -1722,7 +1733,7 @@ function autoFillDate(ri, ti) {
         <span class="ts-check-label">Train Set ${ti+1} <span class="ts-chip ${s}" style="margin-left:.5rem">TS${ti+1}</span>
   <span class="ts-live-chip ${s}" id="live-chip-${ri}-${ti}">${s.charAt(0).toUpperCase()+s.slice(1)}</span>
 </span>
-        <div class="ts-checks">${checks}</div>
+        <div class="ts-checks">${checks}${manualPartialHtml}</div>
         <div style="display:flex;align-items:center;gap:.5rem;width:100%;margin-top:.35rem;flex-wrap:wrap;">
           
           <input type="text" id="emp-${ri}-${ti}" value="${esc(existingEmp)}" placeholder="Emp ID" ${disabledAttr}
@@ -1805,13 +1816,19 @@ function saveRecordChecks(ri) {
       rec.checks[ti]['date'] = document.getElementById(`date-${ri}-${ti}`).value.trim();
       rec.checks[ti]['remark'] = document.getElementById(`rmk-${ri}-${ti}`).value.trim();
 
-      // Read & save checkbox states
+// Read & save checkbox states
       applicable.forEach(c => {
         const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
         if (cb) {
           rec.checks[ti][c] = cb.checked;
         }
       });
+      
+      // Read & save the manual "Partial" checkbox state
+      const partialCb = document.getElementById(`chk-${ri}-${ti}-partial`);
+      if (partialCb) {
+        rec.checks[ti]['partial'] = partialCb.checked;
+      }
     }
   }
 
