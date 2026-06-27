@@ -7,20 +7,20 @@
   "background_color": "#060E1C",
   "theme_color": "#0A1628",
   "orientation": "any",
-  "icons": [
-    {
-      "src": "./FHS.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "./FHS.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ],
+"icons": [
+  {
+    "src": "./FHS.png",
+    "sizes": "192x192",
+    "type": "image/png",
+    "purpose": "any"
+  },
+  {
+    "src": "./FHS-maskable.png", 
+    "sizes": "192x192",
+    "type": "image/png",
+    "purpose": "maskable"
+  }
+],
   "categories": ["productivity", "utilities"],
   "lang": "en"
 }
