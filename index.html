@@ -1766,10 +1766,10 @@ const checks=applicable.map(c=>{
       if (s === 'partial') tsPartialCount++;
     }
 
-    // NEW: Single Save Record Button (Hidden for viewers)
+// NEW: Single Save Record Button (Hidden for viewers)
     const saveAllBtn = isViewer ? '' : `
       <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
-        <button onclick="saveRecordChecks(${ri})" class="btn-save" style="padding: .6rem 1.5rem; white-space: nowrap;">Save Complete Record</button>
+        <button onclick="saveRecordChecks(${ri}, this)" class="btn-save" style="padding: .6rem 1.5rem; white-space: nowrap;">Save Complete Record</button>
       </div>
     `;
 
@@ -1782,11 +1782,11 @@ const checks=applicable.map(c=>{
         </div>
         <div style="display:flex;align-items:center;gap:.75rem;flex-shrink:0">
           <div style="display:flex; gap:.6rem; font-family:var(--mono); font-size:.72rem; font-weight:700; margin-right:.25rem;">
-            <span style="color:var(--success)">${tsDoneCount} Done</span>
-            <span style="color:var(--warn)">${tsPartialCount} Partial</span>
+            <span style="color:var(--success)" id="done-cnt-${ri}">${tsDoneCount} Done</span>
+            <span style="color:var(--warn)" id="part-cnt-${ri}">${tsPartialCount} Partial</span>
           </div>
-          <div class="progress-bar-track" style="width:80px"><div class="progress-bar-fill ${fc}" style="width:${pct}%"></div></div>
-          <span style="font-family:var(--mono);font-size:.82rem;color:var(--accent);min-width:2.5rem;text-align:right">${pct}%</span>
+          <div class="progress-bar-track" style="width:80px"><div class="progress-bar-fill ${fc}" id="pct-bar-${ri}" style="width:${pct}%"></div></div>
+          <span style="font-family:var(--mono);font-size:.82rem;color:var(--accent);min-width:2.5rem;text-align:right" id="pct-text-${ri}">${pct}%</span>
           <span class="chevron" id="chevron-${ri}">▼</span>
         </div>
       </div>
@@ -1814,49 +1814,82 @@ function toggleAccordion(ri){
   document.getElementById('chevron-'+ri).classList.toggle('open');
 }
 
-function saveRecordChecks(ri) {
-  const rec = records[ri];
-  const applicable = ['DA','DB','TA'].filter(k=>rec.applicable[k]);
+function saveRecordChecks(ri, btn) {
+  // 1. Show immediate visual feedback on the button
+  if (btn) {
+    btn.textContent = 'Saving...';
+    btn.style.opacity = '0.7';
+    btn.disabled = true;
+  }
 
-  // Loop through all trainsets for this record and grab the latest DOM data
-  for(let ti=0; ti<rec.trainSets; ti++) {
-    if(!rec.checks[ti]) rec.checks[ti] = {};
+  // 2. Wrap heavy logic in setTimeout so the UI doesn't freeze
+  setTimeout(() => {
+    const rec = records[ri];
+    const applicable = ['DA','DB','TA'].filter(k=>rec.applicable[k]);
 
-    const empEl = document.getElementById(`emp-${ri}-${ti}`);
-    if (empEl) {
-      // Read & save input fields
-      rec.checks[ti]['empId'] = empEl.value.trim();
-      rec.checks[ti]['date'] = document.getElementById(`date-${ri}-${ti}`).value.trim();
-      rec.checks[ti]['remark'] = document.getElementById(`rmk-${ri}-${ti}`).value.trim();
+    for(let ti=0; ti<rec.trainSets; ti++) {
+      if(!rec.checks[ti]) rec.checks[ti] = {};
 
-// Read & save checkbox states
-      applicable.forEach(c => {
-        const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
-        if (cb) {
-          rec.checks[ti][c] = cb.checked;
-        }
-      });
-      
-      // Read & save the manual "Partial" checkbox state
-      const partialCb = document.getElementById(`chk-${ri}-${ti}-partial`);
-      if (partialCb) {
-        rec.checks[ti]['partial'] = partialCb.checked;
+      const empEl = document.getElementById(`emp-${ri}-${ti}`);
+      if (empEl) {
+        rec.checks[ti]['empId'] = empEl.value.trim();
+        rec.checks[ti]['date'] = document.getElementById(`date-${ri}-${ti}`).value.trim();
+        rec.checks[ti]['remark'] = document.getElementById(`rmk-${ri}-${ti}`).value.trim();
+
+        applicable.forEach(c => {
+          const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
+          if (cb) rec.checks[ti][c] = cb.checked;
+        });
+        
+        const partialCb = document.getElementById(`chk-${ri}-${ti}-partial`);
+        if (partialCb) rec.checks[ti]['partial'] = partialCb.checked;
       }
     }
-  }
 
-  addAudit(`Bulk updated checks & details for ${rec.ref}`);
-  save();
-  isDirty = false; // ✅ FIX 4: clear dirty flag after save
+    addAudit(`Bulk updated checks & details for ${rec.ref}`);
+    save();
+    isDirty = false;
 
-  const {pct} = calcProgress(rec);
-  if (pct === 100) {
-    showToast(`${rec.ref} — 100% complete! ✓`);
-  } else {
-    showToast(`Complete record for ${rec.ref} saved successfully`);
-  }
+    // 3. Dynamically update ONLY the header metrics instead of re-rendering everything
+    const {pct} = calcProgress(rec);
+    let tsDoneCount = 0;
+    let tsPartialCount = 0;
+    
+    for (let i = 0; i < rec.trainSets; i++) {
+      const s = tsStatus(rec, i);
+      if (s === 'done') tsDoneCount++;
+      if (s === 'partial') tsPartialCount++;
+    }
+    
+    const doneEl = document.getElementById(`done-cnt-${ri}`);
+    if (doneEl) doneEl.textContent = `${tsDoneCount} Done`;
+    
+    const partEl = document.getElementById(`part-cnt-${ri}`);
+    if (partEl) partEl.textContent = `${tsPartialCount} Partial`;
+    
+    const pctText = document.getElementById(`pct-text-${ri}`);
+    if (pctText) pctText.textContent = `${pct}%`;
+    
+    const pctBar = document.getElementById(`pct-bar-${ri}`);
+    if (pctBar) {
+      const fc = pct === 100 ? 'success' : pct > 0 ? 'warn' : '';
+      pctBar.style.width = `${pct}%`;
+      pctBar.className = `progress-bar-fill ${fc}`;
+    }
 
-  renderChecks();
+    // 4. Toast feedback and reset button
+    if (pct === 100) {
+      showToast(`${rec.ref} — 100% complete! ✓`);
+    } else {
+      showToast(`Complete record for ${rec.ref} saved successfully`);
+    }
+
+    if (btn) {
+      btn.textContent = 'Save Complete Record';
+      btn.style.opacity = '1';
+      btn.disabled = false;
+    }
+  }, 10);
 }
   
 // ════════════════════════════════════════════════
