@@ -1757,6 +1757,15 @@ const checks=applicable.map(c=>{
     
     const fc=pct===100?'success':pct>0?'warn':'';
     
+    // Calculate done and partial counts for the status header
+    let tsDoneCount = 0;
+    let tsPartialCount = 0;
+    for (let i = 0; i < r.trainSets; i++) {
+      const s = tsStatus(r, i);
+      if (s === 'done') tsDoneCount++;
+      if (s === 'partial') tsPartialCount++;
+    }
+
     // NEW: Single Save Record Button (Hidden for viewers)
     const saveAllBtn = isViewer ? '' : `
       <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
@@ -1772,6 +1781,10 @@ const checks=applicable.map(c=>{
           <span style="font-size:.88rem;color:var(--text-pri);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.desc)}</span>
         </div>
         <div style="display:flex;align-items:center;gap:.75rem;flex-shrink:0">
+          <div style="display:flex; gap:.6rem; font-family:var(--mono); font-size:.72rem; font-weight:700; margin-right:.25rem;">
+            <span style="color:var(--success)">${tsDoneCount} Done</span>
+            <span style="color:var(--warn)">${tsPartialCount} Partial</span>
+          </div>
           <div class="progress-bar-track" style="width:80px"><div class="progress-bar-fill ${fc}" style="width:${pct}%"></div></div>
           <span style="font-family:var(--mono);font-size:.82rem;color:var(--accent);min-width:2.5rem;text-align:right">${pct}%</span>
           <span class="chevron" id="chevron-${ri}">▼</span>
