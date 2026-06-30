@@ -1699,15 +1699,78 @@ function autoFillDate(ri, ti) {
   }
 }
   
+// ✅ PERF FIX: Build the (expensive) train-set rows for a single record
+  // on demand only — this used to run for EVERY record on EVERY render.
+  function buildTsBodyHtml(ri){
+    const r = records[ri];
+    const isViewer = currentUser && currentUser.role === 'viewer';
+    const disabledAttr = isViewer ? 'disabled' : '';
+    const applicable = ['DA','DB','TA'].filter(k=>r.applicable[k]);
+
+    const tsRows = Array.from({length:r.trainSets},(_,ti)=>{
+      const checks=applicable.map(c=>{
+        const checked=r.checks[ti]&&r.checks[ti][c]?'checked':'';
+        return `<div class="check-item">
+          <input type="checkbox" id="chk-${ri}-${ti}-${c}" ${checked} ${disabledAttr} onchange="isDirty=true;${isViewer ? '' : `liveUpdateTsChip(${ri},${ti});autoFillDate(${ri},${ti});`}">
+          <label for="chk-${ri}-${ti}-${c}">${c}</label>
+        </div>`;
+      }).join('');
+
+      const manualPartialChecked = (r.checks[ti] && r.checks[ti]['partial']) ? 'checked' : '';
+      const manualPartialHtml = `<div class="check-item" style="margin-left:.5rem; padding-left:.5rem; border-left:1px solid var(--border);">
+          <input type="checkbox" id="chk-${ri}-${ti}-partial" ${manualPartialChecked} ${disabledAttr} onchange="isDirty=true;${isViewer ? '' : `liveUpdateTsChip(${ri},${ti});autoFillDate(${ri},${ti});`}">
+          <label for="chk-${ri}-${ti}-partial" style="color:var(--warn)">Partial</label>
+        </div>`;
+
+      const s=tsStatus(r,ti);
+      const existingRemark=(r.checks[ti]&&r.checks[ti]['remark'])?r.checks[ti]['remark']:'';
+      const existingEmp=(r.checks[ti]&&r.checks[ti]['empId'])?r.checks[ti]['empId']:'';
+      const existingDate=(r.checks[ti]&&r.checks[ti]['date'])?r.checks[ti]['date']:'';
+
+      return `<div class="ts-check-row" style="flex-wrap:wrap;gap:.5rem">
+        <span class="ts-check-label">Train Set ${ti+1} <span class="ts-chip ${s}" style="margin-left:.5rem">TS${ti+1}</span>
+  <span class="ts-live-chip ${s}" id="live-chip-${ri}-${ti}">${s.charAt(0).toUpperCase()+s.slice(1)}</span>
+</span>
+        <div class="ts-checks">${checks}${manualPartialHtml}</div>
+        <div style="display:flex;align-items:center;gap:.5rem;width:100%;margin-top:.35rem;flex-wrap:wrap;">
+
+          <input type="text" id="emp-${ri}-${ti}" value="${esc(existingEmp)}" placeholder="Emp ID" ${disabledAttr}
+          oninput="isDirty=true;"
+            style="width:90px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+
+          <input type="date" id="date-${ri}-${ti}" value="${esc(existingDate)}" ${disabledAttr}
+          oninput="isDirty=true;"
+            style="width:125px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;color-scheme:dark; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+
+          <input type="text" id="rmk-${ri}-${ti}" value="${esc(existingRemark)}" placeholder="Remarks…" ${disabledAttr}
+          oninput="isDirty=true;"
+            style="flex:1;min-width:150px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+
+        </div>
+      </div>`;
+    }).join('');
+
+    const saveAllBtn = isViewer ? '' : `
+      <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
+        <button onclick="saveRecordChecks(${ri}, this)" class="btn-save" style="padding: .6rem 1.5rem; white-space: nowrap;">Save Complete Record</button>
+      </div>
+    `;
+
+    return `<div class="trainset-section">
+          <div class="ts-header">Train Sets — Check applicable cars</div>
+          ${tsRows}
+          ${saveAllBtn}
+        </div>`;
+  }
+
   function renderChecks(){
   const container = document.getElementById('checks-list');
   const openAccordions = Array.from(document.querySelectorAll('.check-record-body.open')).map(el => el.id);
 
   if(!records.length){ container.innerHTML=`<div class="empty-state"><div class="icon">📋</div><p>No records available. Ask Super Admin to create records first.</p></div>`; return; }
-  
-  // NEW: Check if current user is a viewer
-  const isViewer = currentUser && currentUser.role === 'viewer';
-  const disabledAttr = isViewer ? 'disabled' : '';
 
     // ✅ FIX 5: Apply search + type + status filters
   const searchVal = (document.getElementById('checks-search')?.value || '').toLowerCase();
@@ -1728,61 +1791,12 @@ function autoFillDate(ri, ti) {
     return;
   }
  
+  // ✅ PERF FIX: Only build the cheap header for every record. Heavy
+  // per-train-set rows are only built for already-expanded records.
   container.innerHTML = filteredRecords.map(({ r, ri }) => {
-    const applicable=['DA','DB','TA'].filter(k=>r.applicable[k]);
     const {pct}=calcProgress(r);
-    const tsRows=Array.from({length:r.trainSets},(_,ti)=>{
-      
-const checks=applicable.map(c=>{
-        const checked=r.checks[ti]&&r.checks[ti][c]?'checked':'';
-        // NEW: Apply disabled attribute if viewer
-        return `<div class="check-item">
-          <input type="checkbox" id="chk-${ri}-${ti}-${c}" ${checked} ${disabledAttr} onchange="isDirty=true;${isViewer ? '' : `liveUpdateTsChip(${ri},${ti});autoFillDate(${ri},${ti});`}">
-          <label for="chk-${ri}-${ti}-${c}">${c}</label>
-        </div>`;
-      }).join('');
-      
-      const manualPartialChecked = (r.checks[ti] && r.checks[ti]['partial']) ? 'checked' : '';
-      const manualPartialHtml = `<div class="check-item" style="margin-left:.5rem; padding-left:.5rem; border-left:1px solid var(--border);">
-          <input type="checkbox" id="chk-${ri}-${ti}-partial" ${manualPartialChecked} ${disabledAttr} onchange="isDirty=true;${isViewer ? '' : `liveUpdateTsChip(${ri},${ti});autoFillDate(${ri},${ti});`}">
-          <label for="chk-${ri}-${ti}-partial" style="color:var(--warn)">Partial</label>
-        </div>`;
-      
-      const s=tsStatus(r,ti);
-      const existingRemark=(r.checks[ti]&&r.checks[ti]['remark'])?r.checks[ti]['remark']:'';
-      const existingEmp=(r.checks[ti]&&r.checks[ti]['empId'])?r.checks[ti]['empId']:'';
-      const existingDate=(r.checks[ti]&&r.checks[ti]['date'])?r.checks[ti]['date']:'';
-      
-      // NEW: Removed individual Save button & applied disabledAttr to inputs
-      return `<div class="ts-check-row" style="flex-wrap:wrap;gap:.5rem">
-        <span class="ts-check-label">Train Set ${ti+1} <span class="ts-chip ${s}" style="margin-left:.5rem">TS${ti+1}</span>
-  <span class="ts-live-chip ${s}" id="live-chip-${ri}-${ti}">${s.charAt(0).toUpperCase()+s.slice(1)}</span>
-</span>
-        <div class="ts-checks">${checks}${manualPartialHtml}</div>
-        <div style="display:flex;align-items:center;gap:.5rem;width:100%;margin-top:.35rem;flex-wrap:wrap;">
-          
-          <input type="text" id="emp-${ri}-${ti}" value="${esc(existingEmp)}" placeholder="Emp ID" ${disabledAttr}
-          oninput="isDirty=true;"
-            style="width:90px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
-            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-            
-          <input type="date" id="date-${ri}-${ti}" value="${esc(existingDate)}" ${disabledAttr}
-          oninput="isDirty=true;"
-            style="width:125px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;color-scheme:dark; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
-            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-            
-          <input type="text" id="rmk-${ri}-${ti}" value="${esc(existingRemark)}" placeholder="Remarks…" ${disabledAttr}
-          oninput="isDirty=true;"
-            style="flex:1;min-width:150px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
-            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-            
-        </div>
-      </div>`;
-    }).join('');
-    
     const fc=pct===100?'success':pct>0?'warn':'';
-    
-    // Calculate done and partial counts for the status header
+
     let tsDoneCount = 0;
     let tsPartialCount = 0;
     for (let i = 0; i < r.trainSets; i++) {
@@ -1791,12 +1805,8 @@ const checks=applicable.map(c=>{
       if (s === 'partial') tsPartialCount++;
     }
 
-// NEW: Single Save Record Button (Hidden for viewers)
-    const saveAllBtn = isViewer ? '' : `
-      <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
-        <button onclick="saveRecordChecks(${ri}, this)" class="btn-save" style="padding: .6rem 1.5rem; white-space: nowrap;">Save Complete Record</button>
-      </div>
-    `;
+    const isOpen = openAccordions.includes('acc-'+ri);
+    const bodyHtml = isOpen ? buildTsBodyHtml(ri) : '';
 
     return `<div class="check-record">
       <div class="check-record-header" onclick="toggleAccordion(${ri})">
@@ -1815,12 +1825,8 @@ const checks=applicable.map(c=>{
           <span class="chevron" id="chevron-${ri}">▼</span>
         </div>
       </div>
-      <div class="check-record-body" id="acc-${ri}">
-        <div class="trainset-section">
-          <div class="ts-header">Train Sets — Check applicable cars</div>
-          ${tsRows}
-          ${saveAllBtn}
-        </div>
+      <div class="check-record-body" id="acc-${ri}" data-rendered="${isOpen ? '1' : '0'}">
+        ${bodyHtml}
       </div>
     </div>`;
   }).join('');
@@ -1835,7 +1841,12 @@ const checks=applicable.map(c=>{
 }
 
 function toggleAccordion(ri){
-  document.getElementById('acc-'+ri).classList.toggle('open');
+  const body = document.getElementById('acc-'+ri);
+  if (body && body.dataset.rendered !== '1') {
+    body.innerHTML = buildTsBodyHtml(ri);
+    body.dataset.rendered = '1';
+  }
+  body.classList.toggle('open');
   document.getElementById('chevron-'+ri).classList.toggle('open');
 }
 
