@@ -989,7 +989,8 @@ function showPanel(id){
   document.querySelectorAll('.bnav-item').forEach(n=>n.classList.remove('active')); 
   
   // 3. Show correct panel
-  document.getElementById('panel-'+id).classList.add('active');
+  const targetPanel = document.getElementById('panel-'+id);
+  targetPanel.classList.add('active');
   
   // 4. Highlight correct desktop nav
   const nav = document.querySelector(`.nav-item[onclick="showPanel('${id}')"]`);
@@ -999,9 +1000,20 @@ function showPanel(id){
   const bnav = document.getElementById('bnav-'+id);
   if(bnav) bnav.classList.add('active');
 
-  // 6. Render Data
+  // 6. Render Data - Deferred to prevent UI freezing
   const renders = { dashboard:renderDashboard, records:renderRecordsTable, checks:renderChecks, audit:renderAudit, settings:renderSettings };
-  if(renders[id]) renders[id]();
+  if(renders[id]) {
+    // Dim panel visually to indicate loading and prevent double clicks
+    targetPanel.style.opacity = '0.5'; 
+    targetPanel.style.pointerEvents = 'none'; 
+    
+    // 50ms delay lets the browser switch the tab visually before doing the heavy lifting
+    setTimeout(() => {
+      renders[id]();
+      targetPanel.style.opacity = '1';
+      targetPanel.style.pointerEvents = 'auto';
+    }, 50); 
+  }
 }
 
 // ════════════════════════════════════════════════
