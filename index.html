@@ -311,12 +311,23 @@
   /* ── Mobile Bottom Navigation ── */
   .bottom-nav { display:none; }
 
-  @media(max-width:640px){
+@media(max-width:640px){
     .sidebar { display:none !important; }
     .content { padding: 1rem 1rem 5rem 1rem; } /* Extra bottom padding for the bar */
     .stats-grid { grid-template-columns: 1fr 1fr; }
     .form-grid { grid-template-columns: 1fr; }
     .modal { margin: 1rem; }
+    
+    /* Mobile header fixes */
+    .check-record-header { flex-wrap: wrap; gap: 0.75rem; align-items: flex-start !important; }
+    .check-record-header > div:first-child { min-width: 100%; flex-wrap: wrap; }
+    .check-record-header > div:first-child span:last-child { 
+      white-space: normal !important; 
+      overflow: visible !important;
+      flex-basis: 100%;
+      margin-top: 0.25rem;
+    }
+    .check-record-header > div:last-child { width: 100%; justify-content: space-between; }
     
     .bottom-nav {
       display: flex;
@@ -414,7 +425,7 @@
 
 <div class="page active" id="page-login">
 <div class="login-wrap">
-  <div class="login-box">
+  <form class="login-box" onsubmit="event.preventDefault(); doLogin();">
     <div class="login-logo">
       <div class="mark">FHS</div>
       <div class="brand">Fleet/HECP/SECP Tracker<span>Maintenance Management Portal</span></div>
@@ -423,14 +434,14 @@
     <div class="login-sub">Access your role-based workspace</div>
     <div class="field">
       <label>Username</label>
-      <input type="text" id="login-user" placeholder="Enter username" autocomplete="off">
+      <input type="text" id="login-user" placeholder="Enter username" autocomplete="username">
     </div>
     <div class="field">
       <label>Password</label>
-      <input type="password" id="login-pass" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()">
+      <input type="password" id="login-pass" placeholder="Enter password" autocomplete="current-password">
     </div>
-    <button class="btn-primary" onclick="doLogin()">Sign In</button>
-  </div>
+    <button type="submit" class="btn-primary">Sign In</button>
+  </form>
 </div>
 </div>
 
@@ -1611,9 +1622,11 @@ function setChecksFilter(key, val) {
   // Toggle off if same button clicked again
   if (checksFilter[key] === val) { checksFilter[key] = ''; }
   else { checksFilter[key] = val; }
-  // If filtering by status, clear type and vice versa — unless both are different keys
+  
   updateFilterButtons();
-  renderChecks();
+  
+  // Wrap in setTimeout to prevent UI freeze and clear the violation warning
+  setTimeout(() => renderChecks(), 10);
 }
  
 function updateFilterButtons() {
