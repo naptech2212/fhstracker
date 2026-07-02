@@ -887,6 +887,7 @@ function toggleChips(id, btn) {
   const el = document.getElementById(id);
   const expanded = el.classList.toggle('expanded');
   btn.textContent = expanded ? '▲ Hide TS' : '▼ Show TS';
+  if (expanded) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
 }
 
 // ════════════════════════════════════════════════
