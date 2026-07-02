@@ -1278,8 +1278,9 @@ const list = document.getElementById('dash-records');
       const appTags = ['DA','DB','TA'].map(k => `<span class="app-tag ${r.applicable[k] ? 'active' : ''}">${k}</span>`).join('');
       const fc = pct === 100 ? 'success' : pct > 0 ? 'warn' : '';
       
-      // Card template[cite: 1]
-      const cardId = `chips-${cat}-${r.ref.replace(/[^a-zA-Z0-9]/g,'-')}`;
+      // Card template
+// Use the unique timestamp ID to prevent UI collisions if duplicate reference numbers exist
+const cardId = `chips-${r.id || Math.random().toString(36).substr(2, 9)}`;
 const cardHtml = `<div class="record-card">
   <div class="record-header">
     <div class="record-meta">
