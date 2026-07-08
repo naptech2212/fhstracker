@@ -417,6 +417,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 </head>
@@ -563,10 +564,19 @@
             ⎙ Print
             </button>
         </div>
+        <div id="bulk-assign-bar" style="display:none;align-items:center;gap:.6rem;margin:.75rem 0;padding:.6rem .8rem;background:var(--bg-input);border:1px solid var(--accent);border-radius:var(--radius);flex-wrap:wrap;">
+          <span style="font-size:.82rem;color:var(--text-pri)"><b id="bulk-assign-count">0</b> record(s) selected</span>
+          <select id="bulk-assign-select" style="padding:.35rem .6rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.8rem;font-family:var(--sans);outline:none;">
+            <option value="">— Unassign —</option>
+          </select>
+          <button onclick="bulkAssignRecords()" class="btn-save" style="padding:.35rem .9rem;font-size:.8rem;">Assign Selected</button>
+          <button onclick="clearRecordSelection()" class="btn-cancel" style="padding:.35rem .9rem;font-size:.8rem;">Clear Selection</button>
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
               		<tr>
+                		<th id="th-select" style="display:none"><input type="checkbox" id="rec-select-all" onchange="toggleSelectAllRecords(this.checked)"></th>
                 		<th>Type</th>
                 		<th>Reference</th>
                 		<th>Description</th>
@@ -576,6 +586,7 @@
                 		<th>Partial TS</th>
                 		<th>Progress</th>
                 		<th>Remarks</th>
+                		<th id="th-assigned" style="display:none">Assigned To</th>
                 		<th id="th-actions" style="display:none">Actions</th>
               		</tr>
             		</thead>
@@ -598,7 +609,7 @@
       <button onclick="setChecksFilter('type','SECP')"  id="cf-secp"    class="cf-btn">SECP</button>
       <button onclick="setChecksFilter('status','pending')" id="cf-pending" class="cf-btn">Yet to Start</button>
       <button onclick="setChecksFilter('status','partial')" id="cf-partial" class="cf-btn">In Progress</button>
-      <button onclick="setChecksFilter('status','done')"    id="cf-done"    class="cf-btn">Completed</button>
+      <button onclick="setChecksFilter('status','done')"    id="cf-done"    class="cf-btn">Done</button>
     </div>
   </div>
   <div id="checks-list"></div>
@@ -719,8 +730,9 @@ const firebaseConfig = {
 
 // Initialize Firebase using the Compat SDK
 firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore(); 
-  
+const db = firebase.firestore();
+const auth = firebase.auth();
+
 const DEFAULT_PASSWORDS = { superadmin:'admin123', admin:'admin123', viewer:'viewer123' };
 const DEFAULT_USERS = {
   superadmin: { role:'superadmin', label:'Super Admin' },
@@ -740,7 +752,25 @@ let dbReady     = false;   // ← NEW: guard flag
 let lastKnownTimestamp = null;
 let isDirty     = false;   // ✅ FIX 4: unsaved changes flag
 let seedScheduled  = false;
+let firestoreSyncStarted = false;
 
+// ════════════════════════════════════════════════
+//  AUTH GATE — Firestore rules now require request.auth != null,
+//  so we must be signed in (anonymously) before any read/write works.
+// ════════════════════════════════════════════════
+auth.onAuthStateChanged((user) => {
+  if (user && !firestoreSyncStarted) {
+    firestoreSyncStarted = true;
+    startFirestoreSync();
+  }
+});
+
+auth.signInAnonymously().catch((err) => {
+  console.error("Anonymous auth failed:", err);
+  showToast("Cannot connect to server — authentication failed", "err");
+});
+
+function startFirestoreSync(){
 // ⚡ REAL-TIME SYNC
 db.collection("appData").doc("mainStore").onSnapshot(
   { includeMetadataChanges: false },
@@ -806,6 +836,7 @@ setTimeout(() => {
   console.error("Real-time sync error:", err);
   showToast("Network error connecting to live database", "err");
 });
+} // end startFirestoreSync
 
 function save(){
   if (!dbReady) {                          // ✅ FIX 1 — block premature saves
@@ -1045,6 +1076,88 @@ function tsStatus(rec, tsIdx){
 function fmtTime(iso){ const d=new Date(iso); return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
 
 // ════════════════════════════════════════════════
+//  RECORD ASSIGNMENT (restrict editing to one user)
+// ════════════════════════════════════════════════
+function canEditRecord(rec){
+  if(!currentUser) return false;
+  if(currentUser.role === 'superadmin') return true;   // Super Admin can always edit
+  if(currentUser.role === 'viewer') return false;       // Viewers never edit
+  if(!rec.assignedTo) return true;                      // Unassigned -> any admin can edit
+  return rec.assignedTo === currentUser.name;           // Assigned -> only that user
+}
+
+// Users allowed to be assigned as the sole editor of a record (admins + superadmin)
+function getAssignableUsers(){
+  return Object.keys(userMeta).filter(u => userMeta[u].role === 'admin' || userMeta[u].role === 'superadmin');
+}
+
+let selectedRecordIndices = new Set();
+
+function toggleRecordSelect(ri, checked){
+  if(checked) selectedRecordIndices.add(ri);
+  else selectedRecordIndices.delete(ri);
+  updateBulkAssignBar();
+}
+
+function toggleSelectAllRecords(checked){
+  selectedRecordIndices.clear();
+  if(checked){ records.forEach((_, ri) => selectedRecordIndices.add(ri)); }
+  document.querySelectorAll('.rec-select-cb').forEach(cb => cb.checked = checked);
+  updateBulkAssignBar();
+}
+
+function clearRecordSelection(){
+  selectedRecordIndices.clear();
+  document.querySelectorAll('.rec-select-cb').forEach(cb => cb.checked = false);
+  const selectAll = document.getElementById('rec-select-all');
+  if (selectAll) selectAll.checked = false;
+  updateBulkAssignBar();
+}
+
+function updateBulkAssignBar(){
+  const bar = document.getElementById('bulk-assign-bar');
+  const countEl = document.getElementById('bulk-assign-count');
+  if(!bar) return;
+  const isSA = currentUser && currentUser.role === 'superadmin';
+  if(isSA && selectedRecordIndices.size > 0){
+    bar.style.display = 'flex';
+    if(countEl) countEl.textContent = selectedRecordIndices.size;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+// Assign a single record (dropdown in the records table) to a user, or '' to unassign
+function assignRecordUser(ri, username){
+  if(!currentUser || currentUser.role !== 'superadmin') return;
+  const rec = records[ri];
+  if(!rec) return;
+  rec.assignedTo = username || '';
+  addAudit(username ? `Assigned record ${rec.ref} to ${username}` : `Unassigned record ${rec.ref}`);
+  save();
+  showToast(username ? `Record assigned to ${username}` : 'Record unassigned');
+  renderRecordsTable();
+}
+
+// Bulk-assign every selected record to the chosen user
+function bulkAssignRecords(){
+  if(!currentUser || currentUser.role !== 'superadmin') return;
+  const username = document.getElementById('bulk-assign-select')?.value || '';
+  if(!selectedRecordIndices.size){ showToast('No records selected', 'err'); return; }
+  selectedRecordIndices.forEach(ri => {
+    const rec = records[ri];
+    if(rec) rec.assignedTo = username;
+  });
+  addAudit(username
+    ? `Bulk-assigned ${selectedRecordIndices.size} record(s) to ${username}`
+    : `Bulk-unassigned ${selectedRecordIndices.size} record(s)`);
+  save();
+  showToast(username ? `${selectedRecordIndices.size} record(s) assigned to ${username}` : 'Selected records unassigned');
+  clearRecordSelection();
+  renderRecordsTable();
+}
+
+// ════════════════════════════════════════════════
 //  SUPER ADMIN — CREATE RECORD
 // ════════════════════════════════════════════════
 function adjustTS(delta){
@@ -1063,7 +1176,7 @@ function saveRecord(){
   if(!da&&!db&&!ta){ showToast('Select at least one applicable check','err'); return; }
   const rec = {
     id: Date.now().toString(), type, ref, desc, trainSets: tsCount,
-    applicable:{DA:da,DB:db,TA:ta}, checks:{}, remark:'',
+    applicable:{DA:da,DB:db,TA:ta}, checks:{}, remark:'', assignedTo:'',
     createdBy: currentUser.name, createdAt: new Date().toISOString()
   };
   records.push(rec);
@@ -1382,8 +1495,20 @@ function renderRecordsTable(){
   const tbody = document.getElementById('records-tbody');
   const isSA = currentUser && currentUser.role==='superadmin';
   document.getElementById('th-actions').style.display = isSA ? '':'none';
+  document.getElementById('th-select').style.display = isSA ? '':'none';
+  document.getElementById('th-assigned').style.display = isSA ? '':'none';
+
+  // Populate / refresh the bulk-assign user dropdown (superadmin only)
+  const bulkSelect = document.getElementById('bulk-assign-select');
+  if (isSA && bulkSelect) {
+    const assignable = getAssignableUsers();
+    bulkSelect.innerHTML = '<option value="">— Unassign —</option>' +
+      assignable.map(u => `<option value="${esc(u)}">${esc(userMeta[u].label)} (${esc(u)})</option>`).join('');
+  }
+  updateBulkAssignBar();
+
   if(!records.length){
-    tbody.innerHTML=`<tr><td colspan="${isSA?10:9}" style="text-align:center;color:var(--text-dim);padding:2rem">No records found</td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="${isSA?12:9}" style="text-align:center;color:var(--text-dim);padding:2rem">No records found</td></tr>`;
     return;
   }
   tbody.innerHTML = records.map((r,ri)=>{
@@ -1422,7 +1547,19 @@ function renderRecordsTable(){
            <button class="btn-del"  onclick="deleteRecord(${ri})">✕ Delete</button>
          </td>`
       : '';
+    const selectCell = isSA
+      ? `<td style="text-align:center"><input type="checkbox" class="rec-select-cb" ${selectedRecordIndices.has(ri) ? 'checked' : ''} onchange="toggleRecordSelect(${ri}, this.checked)"></td>`
+      : '';
+    const assignedCell = isSA
+      ? `<td>
+           <select onchange="assignRecordUser(${ri}, this.value)" style="padding:.28rem .5rem;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.75rem;font-family:var(--sans);outline:none;">
+             <option value="">— Unassigned —</option>
+             ${getAssignableUsers().map(u => `<option value="${esc(u)}" ${r.assignedTo===u?'selected':''}>${esc(userMeta[u].label)} (${esc(u)})</option>`).join('')}
+           </select>
+         </td>`
+      : '';
     return `<tr>
+      ${selectCell}
       <td><span class="record-type ${r.type.toLowerCase()}">${r.type}</span></td>
       <td class="tbl-mono">${esc(r.ref)}</td>
       <td>${esc(r.desc)}</td>
@@ -1432,6 +1569,7 @@ function renderRecordsTable(){
       <td class="tbl-mono" style="text-align:center; color:var(--warn); font-weight:700;">${tsPartialCount}</td>
       <td><span class="badge ${cl}">${pct}%</span></td>
       ${remarkCell}
+      ${assignedCell}
       ${actionsCell}
     </tr>`;
   }).join('');
@@ -1706,21 +1844,28 @@ function autoFillDate(ri, ti) {
   function buildTsBodyHtml(ri){
     const r = records[ri];
     const isViewer = currentUser && currentUser.role === 'viewer';
-    const disabledAttr = isViewer ? 'disabled' : '';
+    const locked = !canEditRecord(r);
+    const isReadOnly = isViewer || locked;
+    const disabledAttr = isReadOnly ? 'disabled' : '';
     const applicable = ['DA','DB','TA'].filter(k=>r.applicable[k]);
+    const lockBanner = (locked && !isViewer)
+      ? `<div style="margin-bottom:.75rem;padding:.5rem .8rem;background:#F59E0B15;border:1px solid #F59E0B40;border-radius:var(--radius);color:var(--warn);font-size:.8rem;">
+           🔒 This record is assigned to <b>${esc(userMeta[r.assignedTo]?.label || r.assignedTo)}</b> — only that user (or Super Admin) can edit it.
+         </div>`
+      : '';
 
     const tsRows = Array.from({length:r.trainSets},(_,ti)=>{
       const checks=applicable.map(c=>{
         const checked=r.checks[ti]&&r.checks[ti][c]?'checked':'';
         return `<div class="check-item">
-          <input type="checkbox" id="chk-${ri}-${ti}-${c}" ${checked} ${disabledAttr} onchange="isDirty=true;${isViewer ? '' : `liveUpdateTsChip(${ri},${ti});autoFillDate(${ri},${ti});`}">
+          <input type="checkbox" id="chk-${ri}-${ti}-${c}" ${checked} ${disabledAttr} onchange="isDirty=true;${isReadOnly ? '' : `liveUpdateTsChip(${ri},${ti});autoFillDate(${ri},${ti});`}">
           <label for="chk-${ri}-${ti}-${c}">${c}</label>
         </div>`;
       }).join('');
 
       const manualPartialChecked = (r.checks[ti] && r.checks[ti]['partial']) ? 'checked' : '';
       const manualPartialHtml = `<div class="check-item" style="margin-left:.5rem; padding-left:.5rem; border-left:1px solid var(--border);">
-          <input type="checkbox" id="chk-${ri}-${ti}-partial" ${manualPartialChecked} ${disabledAttr} onchange="isDirty=true;${isViewer ? '' : `liveUpdateTsChip(${ri},${ti});autoFillDate(${ri},${ti});`}">
+          <input type="checkbox" id="chk-${ri}-${ti}-partial" ${manualPartialChecked} ${disabledAttr} onchange="isDirty=true;${isReadOnly ? '' : `liveUpdateTsChip(${ri},${ti});autoFillDate(${ri},${ti});`}">
           <label for="chk-${ri}-${ti}-partial" style="color:var(--warn)">Partial</label>
         </div>`;
 
@@ -1738,30 +1883,31 @@ function autoFillDate(ri, ti) {
 
           <input type="text" id="emp-${ri}-${ti}" value="${esc(existingEmp)}" placeholder="Emp ID" ${disabledAttr}
           oninput="isDirty=true;"
-            style="width:90px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
+            style="width:90px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isReadOnly ? 'opacity:0.6; cursor:not-allowed;' : ''}"
             onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
 
           <input type="date" id="date-${ri}-${ti}" value="${esc(existingDate)}" ${disabledAttr}
           oninput="isDirty=true;"
-            style="width:125px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;color-scheme:dark; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
+            style="width:125px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;color-scheme:dark; ${isReadOnly ? 'opacity:0.6; cursor:not-allowed;' : ''}"
             onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
 
           <input type="text" id="rmk-${ri}-${ti}" value="${esc(existingRemark)}" placeholder="Remarks…" ${disabledAttr}
           oninput="isDirty=true;"
-            style="flex:1;min-width:150px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isViewer ? 'opacity:0.6; cursor:not-allowed;' : ''}"
+            style="flex:1;min-width:150px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isReadOnly ? 'opacity:0.6; cursor:not-allowed;' : ''}"
             onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
 
         </div>
       </div>`;
     }).join('');
 
-    const saveAllBtn = isViewer ? '' : `
+    const saveAllBtn = isReadOnly ? '' : `
       <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
         <button onclick="saveRecordChecks(${ri}, this)" class="btn-save" style="padding: .6rem 1.5rem; white-space: nowrap;">Save Complete Record</button>
       </div>
     `;
 
     return `<div class="trainset-section">
+          ${lockBanner}
           <div class="ts-header">Train Sets — Check applicable cars</div>
           ${tsRows}
           ${saveAllBtn}
@@ -1816,6 +1962,7 @@ function autoFillDate(ri, ti) {
           <span class="record-type ${r.type.toLowerCase()}">${r.type}</span>
           <span style="font-family:var(--mono);font-size:.8rem;color:var(--text-dim)">${esc(r.ref)}</span>
           <span style="font-size:.88rem;color:var(--text-pri);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.desc)}</span>
+          ${r.assignedTo ? `<span title="Only this user can edit" style="font-size:.7rem;font-weight:600;color:var(--warn);background:#F59E0B15;border:1px solid #F59E0B40;border-radius:20px;padding:.15rem .55rem;white-space:nowrap;">🔒 ${esc(userMeta[r.assignedTo]?.label || r.assignedTo)}</span>` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:.75rem;flex-shrink:0">
           <div style="display:flex; gap:.6rem; font-family:var(--mono); font-size:.72rem; font-weight:700; margin-right:.25rem;">
@@ -1853,6 +2000,11 @@ function toggleAccordion(ri){
 }
 
 function saveRecordChecks(ri, btn) {
+  // Guard: block saving if this record is locked to another user
+  if (!canEditRecord(records[ri])) {
+    showToast('This record is assigned to another user — you cannot edit it', 'err');
+    return;
+  }
   // 1. Show immediate visual feedback on the button
   if (btn) {
     btn.textContent = 'Saving...';
