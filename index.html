@@ -1850,7 +1850,7 @@ function autoFillDate(ri, ti) {
     const applicable = ['DA','DB','TA'].filter(k=>r.applicable[k]);
     const lockBanner = (locked && !isViewer)
       ? `<div style="margin-bottom:.75rem;padding:.5rem .8rem;background:#F59E0B15;border:1px solid #F59E0B40;border-radius:var(--radius);color:var(--warn);font-size:.8rem;">
-           🔒 This record is assigned to <b>${esc(userMeta[r.assignedTo]?.label || r.assignedTo)}</b> — only that user (or Super Admin) can edit it.
+           🔒 This record is assigned to <b>${esc(r.assignedTo)}</b> — only that user (or Super Admin) can edit it.
          </div>`
       : '';
 
@@ -1962,7 +1962,7 @@ function autoFillDate(ri, ti) {
           <span class="record-type ${r.type.toLowerCase()}">${r.type}</span>
           <span style="font-family:var(--mono);font-size:.8rem;color:var(--text-dim)">${esc(r.ref)}</span>
           <span style="font-size:.88rem;color:var(--text-pri);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.desc)}</span>
-          ${r.assignedTo ? `<span title="Only this user can edit" style="font-size:.7rem;font-weight:600;color:var(--warn);background:#F59E0B15;border:1px solid #F59E0B40;border-radius:20px;padding:.15rem .55rem;white-space:nowrap;margin-right:.75rem;">🔒 ${esc(userMeta[r.assignedTo]?.label || r.assignedTo)}</span>` : ''}
+          ${r.assignedTo ? `<span title="Only this user can edit" style="font-size:.7rem;font-weight:600;color:var(--warn);background:#F59E0B15;border:1px solid #F59E0B40;border-radius:20px;padding:.15rem .55rem;white-space:nowrap;margin-right:.75rem;">🔒 ${esc(r.assignedTo)}</span>` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:.75rem;flex-shrink:0">
           <div style="display:flex; gap:.6rem; font-family:var(--mono); font-size:.72rem; font-weight:700; margin-right:.25rem;">
