@@ -813,6 +813,7 @@ let lastKnownTimestamp = null;
 let isDirty     = false;   // ✅ FIX 4: unsaved changes flag
 let seedScheduled  = false;
 let firestoreSyncStarted = false;
+let unsubscribeSync = null;
 
 // ════════════════════════════════════════════════
 //  AUTH GATE — Firestore rules now require request.auth != null,
@@ -832,7 +833,7 @@ auth.signInAnonymously().catch((err) => {
 
 function startFirestoreSync(){
 // ⚡ REAL-TIME SYNC
-db.collection("appData").doc("mainStore").onSnapshot(
+unsubscribeSync = db.collection("appData").doc("mainStore").onSnapshot(
   { includeMetadataChanges: false },
   (doc) => {
     // ✅ Ignore snapshots from local cache — only trust server data
@@ -999,6 +1000,12 @@ function doLogin(){
   setupRoleUI();
   showPanel('dashboard');
 
+  // ADD THIS: Restart the database sync if it was killed during logout
+  if (!firestoreSyncStarted) {
+    firestoreSyncStarted = true;
+    startFirestoreSync();
+  }
+
   // ✅ FIX 2 — Auto-backup once per day for superadmin
   if (currentUser.role === 'superadmin') {
     const today = new Date().toISOString().slice(0, 10);
@@ -1030,6 +1037,13 @@ function autoBackup(dateStr) {
 function doLogout(){
   addAudit('Signed out');
   currentUser = null;
+  
+  // Cleanly detach the database listener to prevent background network polling
+  if (unsubscribeSync) {
+    unsubscribeSync();
+    unsubscribeSync = null;
+  }
+  firestoreSyncStarted = false; // Reset so it can reconnect on next login
   
   // Clear the saved session
   localStorage.removeItem('fct_session');
