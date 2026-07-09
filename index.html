@@ -1786,14 +1786,40 @@ function exportToXLSX() {
     XLSX.utils.book_append_sheet(wb, ws, finalSheetName);
   });
 
-  // Summary sheet
-  const summaryRows = [['Type', 'Reference', 'Description', 'Train Sets', 'Progress %']];
+  // Summary sheet (Updated to match All Records table)
+  const summaryRows = [['Type', 'Reference', 'Description', 'Train Sets', 'Applicable', 'Completed TS', 'Partial TS', 'Progress %', 'Remarks']];
+  
   records.forEach(r => {
     const { pct } = calcProgress(r);
-    summaryRows.push([r.type, r.ref, r.desc, r.trainSets, pct]);
+    
+    // Format applicable cars
+    const app = ['DA','DB','TA'].filter(k => r.applicable[k]).join(' · ');
+    
+    // Count completed and partial Train Sets
+    let tsDoneCount = 0;
+    let tsPartialCount = 0;
+    for (let i = 0; i < r.trainSets; i++) {
+      const s = tsStatus(r, i);
+      if (s === 'done') tsDoneCount++;
+      if (s === 'partial') tsPartialCount++;
+    }
+
+    summaryRows.push([
+      r.type, 
+      r.ref, 
+      r.desc, 
+      r.trainSets, 
+      app, 
+      tsDoneCount, 
+      tsPartialCount, 
+      pct, 
+      r.remark || ''
+    ]);
   });
+  
   const summaryWs = XLSX.utils.aoa_to_sheet(summaryRows);
-  summaryWs['!cols'] = [{wch:8},{wch:20},{wch:35},{wch:12},{wch:12}];
+  // Adjust column widths for the new layout
+  summaryWs['!cols'] = [{wch:8},{wch:20},{wch:35},{wch:12},{wch:15},{wch:15},{wch:15},{wch:12},{wch:30}];
   XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
 
   // Trigger download with a try-catch to prevent silent failures
