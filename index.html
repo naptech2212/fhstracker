@@ -71,7 +71,9 @@
   /* ADD THIS TO FIX PARTIAL CHIP CONTRAST */
   html[data-theme="light"] .ts-chip.partial,
   html[data-theme="light"] .ts-live-chip.partial {
-    color: #FFFFFF; 
+    background: #F59E0B; /* Bright amber/orange */
+    border-color: #F59E0B;
+    color: #060E1C;      /* Dark text for sharp contrast */
   }
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   html{font-size:14px;scroll-behavior:smooth}
@@ -529,9 +531,16 @@
         <div class="panel-sub">Fleet/HECP/SECP progress overview</div>
         <div class="stats-grid" id="stat-cards"></div>
         
-        <!-- NEW Search Bar -->
-        <div style="margin-bottom: 1.5rem; max-width: 400px;">
-          <input type="text" id="dash-search" placeholder="Search records by reference or description" oninput="debouncedDashboard()" style="width:100%; padding:.65rem .9rem; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-pri); outline:none; font-family:var(--sans); font-size:.9rem; transition:border-color .2s;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+    <!-- NEW Search Bar & Filters -->
+        <div style="margin-bottom: 1.5rem;">
+          <input type="text" id="dash-search" placeholder="Search records by reference or description" oninput="debouncedDashboard()" style="width:100%; max-width: 400px; padding:.65rem .9rem; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-pri); outline:none; font-family:var(--sans); font-size:.9rem; transition:border-color .2s; margin-bottom: 0.75rem;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
+            <button onclick="setDashFilter('status','')"      id="df-all"     class="cf-btn active">All</button>
+            <button onclick="setDashFilter('status','pending')" id="df-pending" class="cf-btn">Yet to Start</button>
+            <button onclick="setDashFilter('status','partial')" id="df-partial" class="cf-btn">In Progress</button>
+            <button onclick="setDashFilter('status','done')"    id="df-done"    class="cf-btn">Completed</button>
+          </div>
         </div>
 
         <div id="dash-donuts" style="margin-bottom:1.25rem;"></div>  
@@ -1375,12 +1384,39 @@ function renderDonutRow() {
     </div>`;
   }).join('')}</div>`;
 }
+
+// ════════════════════════════════════════════════
+//  DASHBOARD FILTERS
+// ════════════════════════════════════════════════
+let dashFilter = { status: '' };
+
+function setDashFilter(key, val) {
+  // Toggle off if same button clicked again
+  if (dashFilter[key] === val) { dashFilter[key] = ''; }
+  else { dashFilter[key] = val; }
   
-  function renderDashboard(){
+  // Update UI buttons
+  const statusMap = { '':'all', 'pending':'pending', 'partial':'partial', 'done':'done' };
+  ['all','pending','partial','done'].forEach(id => {
+    const el = document.getElementById('df-' + id);
+    if (el) el.classList.remove('active');
+  });
+  
+  const statusId = statusMap[dashFilter.status];
+  if (statusId) {
+    const el = document.getElementById('df-' + statusId);
+    if (el) el.classList.add('active');
+  }
+  
+  // Re-render dashboard
+  renderDashboard();
+}
+  
+function renderDashboard(){
   const total = records.length;
   let sumPct = 0, complete = 0;
   
-  // Calculate overall statistics
+  // Calculate overall statistics (Always based on ALL records)
   records.forEach(r => { 
     const { pct } = calcProgress(r); 
     sumPct += pct; 
@@ -1389,7 +1425,7 @@ function renderDonutRow() {
   
   const avg = total ? Math.round(sumPct / total) : 0;
   
-  // Render top overall stats[cite: 1]
+  // Render top overall stats
   document.getElementById('stat-cards').innerHTML = `
     <div class="stat-card cyan"><div class="stat-label">Total Records</div><div class="stat-value cyan">${total}</div><div class="stat-sub">across all categories</div></div>
     <div class="stat-card success"><div class="stat-label">Completed</div><div class="stat-value success">${complete}</div><div class="stat-sub">100% checks done</div></div>
@@ -1397,7 +1433,7 @@ function renderDonutRow() {
     <div class="stat-card purple"><div class="stat-label">In Progress</div><div class="stat-value purple">${total-complete}</div><div class="stat-sub">pending full completion</div></div>`;
     
   document.getElementById('dash-donuts').innerHTML = renderDonutRow();
-const list = document.getElementById('dash-records');
+  const list = document.getElementById('dash-records');
   
   if(!records.length){ 
     list.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>No records yet. Super Admin can create the first one.</p></div>`; 
@@ -1412,10 +1448,23 @@ const list = document.getElementById('dash-records');
 
   // Generate boxes for each category
   categories.forEach(cat => {
-    const catRecords = records.filter(r => 
-      r.type === cat && 
-      (r.ref.toLowerCase().includes(searchVal) || r.desc.toLowerCase().includes(searchVal))
-    );
+    // APPLY SEARCH AND STATUS FILTERS HERE
+    const catRecords = records.filter(r => {
+      if (r.type !== cat) return false;
+      
+      // Text search
+      if (searchVal && !r.ref.toLowerCase().includes(searchVal) && !r.desc.toLowerCase().includes(searchVal)) return false;
+      
+      // Button filters
+      if (dashFilter.status) {
+        const { pct } = calcProgress(r);
+        if (dashFilter.status === 'done'    && pct !== 100) return false;
+        if (dashFilter.status === 'partial' && !(pct > 0 && pct < 100)) return false;
+        if (dashFilter.status === 'pending' && pct !== 0) return false;
+      }
+      
+      return true;
+    });
     
     let completed = [];
     let inProgress = [];
@@ -1437,33 +1486,32 @@ const list = document.getElementById('dash-records');
       const fc = pct === 100 ? 'success' : pct > 0 ? 'warn' : '';
       
       // Card template
-// Use the unique timestamp ID to prevent UI collisions if duplicate reference numbers exist
-const cardId = `chips-${r.id || Math.random().toString(36).substr(2, 9)}`;
-const cardHtml = `<div class="record-card">
-  <div class="record-header">
-    <div class="record-meta">
-      <div><span class="record-type ${r.type.toLowerCase()}">${r.type}</span></div>
-      <div class="record-ref">${esc(r.ref)}</div>
-      <div class="record-desc">${esc(r.desc)}</div>
-      <div class="applicable-tags" style="margin-top:.5rem">${appTags}</div>
-    </div>
-    <div class="record-pct">${pct}%</div>
-  </div>
-  <div class="progress-bar-wrap">
-    <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--text-dim);margin-bottom:.15rem">
-      <span>${done} of ${t} checks completed</span><span>${r.trainSets} train sets</span>
-    </div>
-    <div style="display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:.4rem;font-family:var(--mono);">
-      <span style="color:#FFFFFF;">${tsDoneCount} Fully Completed</span>
-      <span style="color:var(--warn);">${tsPartialCount} Partially Completed</span>
-    </div>
-    <div class="progress-bar-track"><div class="progress-bar-fill ${fc}" style="width:${pct}%"></div></div>
-  </div>
-  <button class="chips-toggle" onclick="toggleChips('${cardId}',this)">▼ Show TS</button>
-  <div class="ts-chips-wrap" id="${cardId}">
-    <div class="trainset-chips">${chips}</div>
-  </div>
-</div>`;
+      const cardId = `chips-${r.id || Math.random().toString(36).substr(2, 9)}`;
+      const cardHtml = `<div class="record-card">
+        <div class="record-header">
+          <div class="record-meta">
+            <div><span class="record-type ${r.type.toLowerCase()}">${r.type}</span></div>
+            <div class="record-ref">${esc(r.ref)}</div>
+            <div class="record-desc">${esc(r.desc)}</div>
+            <div class="applicable-tags" style="margin-top:.5rem">${appTags}</div>
+          </div>
+          <div class="record-pct">${pct}%</div>
+        </div>
+        <div class="progress-bar-wrap">
+          <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--text-dim);margin-bottom:.15rem">
+            <span>${done} of ${t} checks completed</span><span>${r.trainSets} train sets</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:.4rem;font-family:var(--mono);">
+            <span style="color:#FFFFFF;">${tsDoneCount} Fully Completed</span>
+            <span style="color:var(--warn);">${tsPartialCount} Partially Completed</span>
+          </div>
+          <div class="progress-bar-track"><div class="progress-bar-fill ${fc}" style="width:${pct}%"></div></div>
+        </div>
+        <button class="chips-toggle" onclick="toggleChips('${cardId}',this)">▼ Show TS</button>
+        <div class="ts-chips-wrap" id="${cardId}">
+          <div class="trainset-chips">${chips}</div>
+        </div>
+      </div>`;
 
       // Group by progress status
       if (pct === 100) completed.push(cardHtml);
@@ -1471,8 +1519,10 @@ const cardHtml = `<div class="record-card">
       else yetToStart.push(cardHtml);
     });
 
-    // Build the category container — ✅ FIX 10: with summary bar
+    // Build the category container
     const catTotal = catRecords.length;
+    
+    // We base the percentage logic here on the filtered results for context
     const catComplete = catRecords.filter(r => calcProgress(r).pct === 100).length;
     const catPct = catTotal ? Math.round(catComplete / catTotal * 100) : 0;
     const catPctColor = catPct === 100 ? 'var(--success)' : catPct > 0 ? 'var(--warn)' : 'var(--text-dim)';
@@ -1485,7 +1535,7 @@ const cardHtml = `<div class="record-card">
             <span style="font-size:1.1rem;font-weight:700;color:var(--text-pri);">Tracker</span>
           </div>
           <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
-            <span style="font-size:.8rem;color:var(--text-sec);">${catComplete} of ${catTotal} records at 100%</span>
+            <span style="font-size:.8rem;color:var(--text-sec);">${catComplete} of ${catTotal} records shown at 100%</span>
             <div style="width:120px;height:7px;background:var(--bg-deep);border-radius:999px;overflow:hidden;">
               <div style="height:100%;width:${catPct}%;background:${catPctColor};border-radius:999px;transition:width .4s;"></div>
             </div>
@@ -1494,7 +1544,7 @@ const cardHtml = `<div class="record-card">
         </div>`;
 
     if (catRecords.length === 0) {
-      dashboardHtml += `<div style="color: var(--text-dim); font-size: 0.9rem;">No active records for ${cat}.</div>`;
+      dashboardHtml += `<div style="color: var(--text-dim); font-size: 0.9rem;">No records match your filter criteria for ${cat}.</div>`;
     } else {
       // Completed Section
       if (completed.length > 0) {
