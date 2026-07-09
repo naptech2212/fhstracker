@@ -358,6 +358,18 @@
     .stats-grid { grid-template-columns: 1fr 1fr; }
     .form-grid { grid-template-columns: 1fr; }
     .modal { margin: 1rem; }
+
+    /* ADD THESE NEW MOBILE FIXES */
+    /* Top Bar Fixes */
+    .topbar { padding: 0.75rem; }
+    .topbar-brand { font-size: 0.8rem; line-height: 1.2; }
+    .topbar-user { display: none; } /* Hides username to save space */
+    .role-badge { padding: 0.2rem 0.5rem; font-size: 0.65rem; white-space: nowrap; }
+    .btn-logout { padding: 0.3rem 0.6rem; font-size: 0.75rem; white-space: nowrap; }
+    
+    /* Donut Cards Fixes */
+    .donut-row { flex-direction: column; gap: 0.85rem; }
+    .donut-card { width: 100%; min-width: unset; justify-content: flex-start; }
     
     /* Mobile header fixes */
     .check-record-header { flex-wrap: wrap; gap: 0.75rem; align-items: flex-start !important; }
@@ -442,7 +454,7 @@
   border:1px solid var(--border);border-radius:var(--radius-lg);padding:.85rem 1.1rem;flex:1;min-width:160px;
 }
 .donut-legend { display:flex;flex-direction:column;gap:.3rem; }
-.donut-legend-item { display:flex;align-items:center;gap:.45rem;font-size:.75rem;color:var(--text-sec); }
+.donut-legend-item { display:flex;align-items:center;gap:.45rem;font-size:.75rem;color:var(--text-sec); white-space:nowrap; }
 .donut-legend-dot { width:9px;height:9px;border-radius:50%;flex-shrink:0; }
 .donut-label { font-size:.7rem;font-weight:700;color:var(--text-dim);letter-spacing:.07em;margin-bottom:.2rem; }
 .donut-count { font-size:1.1rem;font-weight:700;color:var(--text-pri);font-family:var(--mono); }
