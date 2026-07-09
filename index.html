@@ -11,6 +11,15 @@
 <link rel="apple-touch-icon" href="./FHS.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  // Apply saved theme immediately, before CSS paints, to avoid a flash of the wrong theme.
+  (function(){
+    try {
+      var t = localStorage.getItem('fct_theme') || 'dark';
+      if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    } catch(e) {}
+  })();
+</script>
 <style>
   :root {
     --bg-deep:    #060E1C;
@@ -33,6 +42,31 @@
     --radius-lg:  12px;
     --mono:       'JetBrains Mono', monospace;
     --sans:       'Inter', sans-serif;
+  }
+  /* ═══ LIGHT THEME OVERRIDES ═══ */
+  html[data-theme="light"] {
+    --bg-deep:    #F4F7FB;
+    --bg-base:    #FFFFFF;
+    --bg-card:    #FFFFFF;
+    --bg-hover:   #EEF3F9;
+    --bg-input:   #F7FAFD;
+    --accent:     #00A896;
+    --accent-dim: #008475;
+    --accent-glow:#00A89618;
+    --warn:       #B45309;
+    --danger:     #DC2626;
+    --success:    #16A34A;
+    --text-pri:   #10202E;
+    --text-sec:   #4B6478;
+    --text-dim:   #8CA0AF;
+    --border:     #DCE5EE;
+    --border-lit: #C7D5E2;
+  }
+  html[data-theme="light"] body{
+    background:var(--bg-deep);
+  }
+  html[data-theme="light"] .login-wrap{
+    background:radial-gradient(ellipse 80% 60% at 50% 0%,#00A89612 0%,transparent 70%),var(--bg-deep);
   }
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   html{font-size:14px;scroll-behavior:smooth}
@@ -2081,6 +2115,30 @@ function saveRecordChecks(ri, btn) {
     }
   }, 10);
 }
+
+function setTheme(theme){
+  if (theme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    theme = 'dark';
+  }
+  localStorage.setItem('fct_theme', theme);
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) metaTheme.setAttribute('content', theme === 'light' ? '#F4F7FB' : '#0A1628');
+  renderSettings();
+  showToast(theme === 'light' ? 'Light theme applied' : 'Dark theme applied');
+}
+
+function resetToDefaultSettings(){
+  if (!confirm('Reset appearance back to the default (dark theme)? This only affects this device.')) return;
+  localStorage.removeItem('fct_theme');
+  document.documentElement.removeAttribute('data-theme');
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) metaTheme.setAttribute('content', '#0A1628');
+  renderSettings();
+  showToast('Settings reset to default');
+}
   
 // ════════════════════════════════════════════════
 //  SETTINGS — PASSWORD MANAGEMENT (Super Admin)
@@ -2157,6 +2215,32 @@ function renderSettings(){
       </div>
       <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreBackup(event)">
       <button class="btn-pw-del" style="border-color:var(--warn); color:var(--warn)" onclick="document.getElementById('restore-file').click()">↑ Restore from Backup</button>
+    </div>
+  `;
+
+  const savedTheme = localStorage.getItem('fct_theme') || 'dark';
+  html += `
+    <div class="pw-card" style="border-color:var(--text-dim);">
+      <div class="pw-card-header">
+        <div class="pw-avatar" style="background:var(--bg-input);color:var(--text-pri);font-size:1.1rem">🎨</div>
+        <div><div class="pw-name">Appearance</div><div class="pw-role">Choose your display theme</div></div>
+      </div>
+      <div style="font-size:.8rem;color:var(--text-sec);margin-bottom:1rem;line-height:1.4">
+        Saved on this device only — every user can pick their own.
+      </div>
+      <div style="display:flex;gap:.6rem;margin-bottom:.75rem">
+        <button id="theme-btn-dark" onclick="setTheme('dark')"
+          style="flex:1;padding:.6rem;border-radius:var(--radius);cursor:pointer;font-family:var(--sans);font-size:.85rem;font-weight:600;
+          border:2px solid ${savedTheme==='dark' ? 'var(--accent)' : 'var(--border)'};
+          background:${savedTheme==='dark' ? 'var(--accent-glow)' : 'var(--bg-input)'};
+          color:${savedTheme==='dark' ? 'var(--accent)' : 'var(--text-sec)'}">🌙 Dark</button>
+        <button id="theme-btn-light" onclick="setTheme('light')"
+          style="flex:1;padding:.6rem;border-radius:var(--radius);cursor:pointer;font-family:var(--sans);font-size:.85rem;font-weight:600;
+          border:2px solid ${savedTheme==='light' ? 'var(--accent)' : 'var(--border)'};
+          background:${savedTheme==='light' ? 'var(--accent-glow)' : 'var(--bg-input)'};
+          color:${savedTheme==='light' ? 'var(--accent)' : 'var(--text-sec)'}">☀️ Light</button>
+      </div>
+      <button class="btn-pw-del" onclick="resetToDefaultSettings()">↺ Reset to Default Settings</button>
     </div>
   `;
 
