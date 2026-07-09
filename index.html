@@ -68,6 +68,11 @@
   html[data-theme="light"] .login-wrap{
     background:radial-gradient(ellipse 80% 60% at 50% 0%,#00A89612 0%,transparent 70%),var(--bg-deep);
   }
+  /* ADD THIS TO FIX PARTIAL CHIP CONTRAST */
+  html[data-theme="light"] .ts-chip.partial,
+  html[data-theme="light"] .ts-live-chip.partial {
+    color: #FFFFFF; 
+  }
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   html{font-size:14px;scroll-behavior:smooth}
   body{font-family:var(--sans);background:var(--bg-deep);color:var(--text-pri);min-height:100vh;line-height:1.5}
@@ -1024,18 +1029,24 @@ function setupRoleUI(){
   // Desktop Nav Toggles
   document.getElementById('nav-create').style.display   = r==='superadmin' ? 'flex':'none';
   document.getElementById('nav-checks').style.display   = (r==='superadmin' || r==='admin' || r==='viewer') ? 'flex':'none';
-  document.getElementById('nav-settings').style.display = r==='superadmin' ? 'flex':'none';
-  document.getElementById('nav-audit').style.display    = r==='superadmin' ? 'flex':'none'; // Hides Desktop Audit
+  
+  // CHANGED: Always show settings for theme selection
+  document.getElementById('nav-settings').style.display = 'flex'; 
+  
+  document.getElementById('nav-audit').style.display    = r==='superadmin' ? 'flex':'none';
   document.getElementById('th-actions').style.display   = r==='superadmin' ? ''    :'none';
   document.getElementById('btn-clear-audit').style.display = r==='superadmin' ? 'block' : 'none';
   
   // Mobile Nav Toggles
   document.getElementById('bnav-create').style.display   = r==='superadmin' ? 'flex':'none';
   document.getElementById('bnav-checks').style.display   = (r==='superadmin' || r==='admin' || r==='viewer') ? 'flex':'none';
-  document.getElementById('bnav-settings').style.display = r==='superadmin' ? 'flex':'none';
-  document.getElementById('bnav-audit').style.display    = r==='superadmin' ? 'flex':'none'; // Hides Mobile Audit
+  
+  // CHANGED: Always show settings for theme selection
+  document.getElementById('bnav-settings').style.display = 'flex'; 
+  
+  document.getElementById('bnav-audit').style.display    = r==='superadmin' ? 'flex':'none';
 }
-
+  
 // ════════════════════════════════════════════════
 //  NAVIGATION
 // ════════════════════════════════════════════════
@@ -2144,80 +2155,87 @@ function resetToDefaultSettings(){
 //  SETTINGS — PASSWORD MANAGEMENT (Super Admin)
 // ════════════════════════════════════════════════
 function renderSettings(){
-  const users = Object.keys(userMeta);
-  
-  // Render existing user password cards
-  let html = users.map(u=>{
-    const meta = userMeta[u];
-    const deleteBtn = (u !== currentUser.name) 
-      ? `<button class="btn-pw-del" onclick="deleteUser('${u}')">Delete User</button>` 
-      : ``;
+  let html = '';
+  const isSA = currentUser && currentUser.role === 'superadmin';
 
-    return `<div class="pw-card">
-      <div class="pw-card-header">
-        <div class="pw-avatar ${meta.role}">${u.slice(0,2).toUpperCase()}</div>
-        <div><div class="pw-name">${esc(u)}</div><div class="pw-role">${meta.label}</div></div>
-      </div>
-      <div style="font-size:.72rem;color:var(--text-dim);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.06em">New Password</div>
-      <div class="pw-input-wrap">
-        <input type="password" id="pw-new-${u}" placeholder="Enter new password…">
-        <button class="pw-eye" onclick="togglePwEye('pw-new-${u}',this)">👁</button>
-      </div>
-      <div style="font-size:.72rem;color:var(--text-dim);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.06em">Confirm Password</div>
-      <div class="pw-input-wrap">
-        <input type="password" id="pw-con-${u}" placeholder="Repeat new password…">
-        <button class="pw-eye" onclick="togglePwEye('pw-con-${u}',this)">👁</button>
-      </div>
-      <button class="btn-pw-save" onclick="changePassword('${u}')">Update Password</button>
-      ${deleteBtn}
-    </div>`;
-  }).join('');
+  // Only render Admin tools if the user is a superadmin
+  if (isSA) {
+    const users = Object.keys(userMeta);
+    
+    // Render existing user password cards
+    html += users.map(u=>{
+      const meta = userMeta[u];
+      const deleteBtn = (u !== currentUser.name) 
+        ? `<button class="btn-pw-del" onclick="deleteUser('${u}')">Delete User</button>` 
+        : ``;
 
-  // Add the "Create New User" card
-  html += `
-    <div class="pw-card" style="border-color:var(--accent); background:var(--accent-glow)">
-      <div class="pw-card-header">
-        <div class="pw-avatar" style="background:var(--accent);color:#060E1C;font-size:1.2rem">+</div>
-        <div><div class="pw-name">Add New User</div><div class="pw-role">Create Admin or Viewer</div></div>
-      </div>
-      <div class="pw-input-wrap">
-        <input type="text" id="new-u-name" placeholder="Enter Username (lowercase)" autocomplete="off">
-      </div>
-      <div class="pw-input-wrap">
-        <select id="new-u-role">
-          <option value="admin">Admin</option>
-          <option value="viewer">Viewer</option>
-        </select>
-      </div>
-      <div class="pw-input-wrap">
-        <input type="password" id="new-u-pass" placeholder="Enter Password">
-      </div>
-      <button class="btn-pw-save" onclick="addNewUser()">Create User</button>
-    </div>
-  `;
+      return `<div class="pw-card">
+        <div class="pw-card-header">
+          <div class="pw-avatar ${meta.role}">${u.slice(0,2).toUpperCase()}</div>
+          <div><div class="pw-name">${esc(u)}</div><div class="pw-role">${meta.label}</div></div>
+        </div>
+        <div style="font-size:.72rem;color:var(--text-dim);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.06em">New Password</div>
+        <div class="pw-input-wrap">
+          <input type="password" id="pw-new-${u}" placeholder="Enter new password…">
+          <button class="pw-eye" onclick="togglePwEye('pw-new-${u}',this)">👁</button>
+        </div>
+        <div style="font-size:.72rem;color:var(--text-dim);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.06em">Confirm Password</div>
+        <div class="pw-input-wrap">
+          <input type="password" id="pw-con-${u}" placeholder="Repeat new password…">
+          <button class="pw-eye" onclick="togglePwEye('pw-con-${u}',this)">👁</button>
+        </div>
+        <button class="btn-pw-save" onclick="changePassword('${u}')">Update Password</button>
+        ${deleteBtn}
+      </div>`;
+    }).join('');
 
-  // 🔥 NEW: Add the Backup & Restore Card
-  html += `
-    <div class="pw-card" style="border-color:var(--text-dim);">
-      <div class="pw-card-header">
-        <div class="pw-avatar" style="background:var(--bg-input);color:var(--text-pri);font-size:1.1rem">💾</div>
-        <div><div class="pw-name">Database Backup</div><div class="pw-role">Export or Restore System Data</div></div>
+    // Add the "Create New User" card
+    html += `
+      <div class="pw-card" style="border-color:var(--accent); background:var(--accent-glow)">
+        <div class="pw-card-header">
+          <div class="pw-avatar" style="background:var(--accent);color:#060E1C;font-size:1.2rem">+</div>
+          <div><div class="pw-name">Add New User</div><div class="pw-role">Create Admin or Viewer</div></div>
+        </div>
+        <div class="pw-input-wrap">
+          <input type="text" id="new-u-name" placeholder="Enter Username (lowercase)" autocomplete="off">
+        </div>
+        <div class="pw-input-wrap">
+          <select id="new-u-role">
+            <option value="admin">Admin</option>
+            <option value="viewer">Viewer</option>
+          </select>
+        </div>
+        <div class="pw-input-wrap">
+          <input type="password" id="new-u-pass" placeholder="Enter Password">
+        </div>
+        <button class="btn-pw-save" onclick="addNewUser()">Create User</button>
       </div>
-      <div style="font-size:.8rem;color:var(--text-sec);margin-bottom:1rem;line-height:1.4">
-        Download a full snapshot of your users, passwords, records, and audit logs.
-      </div>
-      <button class="btn-pw-save" style="margin-bottom:.5rem" onclick="downloadBackup()">↓ Download Backup (.json)</button>
-      
-      <div style="width:100%; height:1px; background:var(--border); margin: 1rem 0;"></div>
-      
-      <div style="font-size:.8rem;color:var(--warn);margin-bottom:1rem;line-height:1.4">
-        Restoring will <b>permanently overwrite</b> the current live database.
-      </div>
-      <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreBackup(event)">
-      <button class="btn-pw-del" style="border-color:var(--warn); color:var(--warn)" onclick="document.getElementById('restore-file').click()">↑ Restore from Backup</button>
-    </div>
-  `;
+    `;
 
+    // Backup & Restore Card
+    html += `
+      <div class="pw-card" style="border-color:var(--text-dim);">
+        <div class="pw-card-header">
+          <div class="pw-avatar" style="background:var(--bg-input);color:var(--text-pri);font-size:1.1rem">💾</div>
+          <div><div class="pw-name">Database Backup</div><div class="pw-role">Export or Restore System Data</div></div>
+        </div>
+        <div style="font-size:.8rem;color:var(--text-sec);margin-bottom:1rem;line-height:1.4">
+          Download a full snapshot of your users, passwords, records, and audit logs.
+        </div>
+        <button class="btn-pw-save" style="margin-bottom:.5rem" onclick="downloadBackup()">↓ Download Backup (.json)</button>
+        
+        <div style="width:100%; height:1px; background:var(--border); margin: 1rem 0;"></div>
+        
+        <div style="font-size:.8rem;color:var(--warn);margin-bottom:1rem;line-height:1.4">
+          Restoring will <b>permanently overwrite</b> the current live database.
+        </div>
+        <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreBackup(event)">
+        <button class="btn-pw-del" style="border-color:var(--warn); color:var(--warn)" onclick="document.getElementById('restore-file').click()">↑ Restore from Backup</button>
+      </div>
+    `;
+  }
+
+  // Render the Appearance Card for EVERYONE
   const savedTheme = localStorage.getItem('fct_theme') || 'dark';
   html += `
     <div class="pw-card" style="border-color:var(--text-dim);">
@@ -2246,7 +2264,7 @@ function renderSettings(){
 
   document.getElementById('settings-cards').innerHTML = html;
 }
-
+  
 // ════════════════════════════════════════════════
 //  BACKUP & RESTORE
 // ════════════════════════════════════════════════
