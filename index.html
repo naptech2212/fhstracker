@@ -1528,9 +1528,9 @@ function renderDashboard(){
             <span>${done} of ${t} checks completed</span><span>${r.trainSets} train sets</span>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:.4rem;font-family:var(--mono);">
-            <span style="color:#FFFFFF;">${tsDoneCount} Fully Completed</span>
-            <span style="color:var(--warn);">${tsPartialCount} Partially Completed</span>
-          </div>
+                <span style="color:var(--success); font-weight:700;">${tsDoneCount} Fully Completed</span>
+                <span style="color:var(--warn); font-weight:700;">${tsPartialCount} Partially Completed</span>
+              </div>
           <div class="progress-bar-track"><div class="progress-bar-fill ${fc}" style="width:${pct}%"></div></div>
         </div>
         <button class="chips-toggle" onclick="toggleChips('${cardId}',this)">▼ Show TS</button>
