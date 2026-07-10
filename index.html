@@ -989,8 +989,15 @@ function toggleChips(id, btn) {
 //  AUTH
 // ════════════════════════════════════════════════
 function doLogin(){
+  // 1. NEW: Block login until Firebase has finished fetching the real passwords
+  if (!dbReady) {
+    showToast('Connecting to secure server... Please wait a second and try again.', 'warn');
+    return;
+  }
+
   const u = document.getElementById('login-user').value.trim().toLowerCase();
   const p = document.getElementById('login-pass').value;
+  
   if(!userMeta[u] || passwords[u] !== p){ showToast('Invalid credentials','err'); return; }
   currentUser = { name: u, role: userMeta[u].role, label: userMeta[u].label };
   
@@ -1003,13 +1010,13 @@ function doLogin(){
   setupRoleUI();
   showPanel('dashboard');
 
-  // ADD THIS: Restart the database sync if it was killed during logout
+  // Restart the database sync if it was killed during logout
   if (!firestoreSyncStarted) {
     firestoreSyncStarted = true;
     startFirestoreSync();
   }
 
-  // ✅ FIX 2 — Auto-backup once per day for superadmin
+  // Auto-backup once per day for superadmin
   if (currentUser.role === 'superadmin') {
     const today = new Date().toISOString().slice(0, 10);
     const lastBackup = localStorage.getItem('fct_last_auto_backup');
