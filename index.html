@@ -606,23 +606,26 @@
       </div>
 
       <div class="panel" id="panel-records">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
           <div>
             <div class="panel-title">All Records</div>
             <div class="panel-sub" id="records-sub">Complete list of Fleet/HECP/SECP records and their current status</div>
           </div>
-          <button onclick="exportToCSV()" 
-            style="padding:.4rem .8rem; background:transparent; border:1px solid var(--accent); border-radius:var(--radius); color:var(--accent); font-size:.8rem; cursor:pointer; font-family:var(--sans); font-weight:600; transition:all .2s;">
-            ↓ Export CSV
-          </button>
-          <button onclick="exportToXLSX()"
-            style="padding:.4rem .8rem;background:transparent;border:1px solid var(--success);border-radius:var(--radius);color:var(--success);font-size:.8rem;cursor:pointer;font-family:var(--sans);font-weight:600;">
-            ↓ Export Excel
+          
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button onclick="exportToCSV()" 
+              style="padding:.4rem .8rem; background:transparent; border:1px solid var(--accent); border-radius:var(--radius); color:var(--accent); font-size:.8rem; cursor:pointer; font-family:var(--sans); font-weight:600; transition:all .2s;">
+              ↓ Export CSV
             </button>
-          <button onclick="printReport()"
-            style="padding:.4rem .8rem;background:transparent;border:1px solid var(--text-sec);border-radius:var(--radius);color:var(--text-sec);font-size:.8rem;cursor:pointer;font-family:var(--sans);font-weight:600;">
-            ⎙ Print
+            <button onclick="exportToXLSX()"
+              style="padding:.4rem .8rem;background:transparent;border:1px solid var(--success);border-radius:var(--radius);color:var(--success);font-size:.8rem;cursor:pointer;font-family:var(--sans);font-weight:600;">
+              ↓ Export Excel
             </button>
+            <button onclick="printReport()"
+              style="padding:.4rem .8rem;background:transparent;border:1px solid var(--text-sec);border-radius:var(--radius);color:var(--text-sec);font-size:.8rem;cursor:pointer;font-family:var(--sans);font-weight:600;">
+              ⎙ Print
+            </button>
+          </div>
         </div>
         <div id="bulk-assign-bar" style="display:none;align-items:center;gap:.6rem;margin:.75rem 0;padding:.6rem .8rem;background:var(--bg-input);border:1px solid var(--accent);border-radius:var(--radius);flex-wrap:wrap;">
           <span style="font-size:.82rem;color:var(--text-pri)"><b id="bulk-assign-count">0</b> record(s) selected</span>
