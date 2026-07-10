@@ -1,5 +1,5 @@
-// Fleet Compliance Tracker — Service Worker v1.0
-const CACHE = 'fct-v1';
+// Fleet Compliance Tracker — Service Worker v2.0
+const CACHE = 'fct-v2';
 const ASSETS = [
   './', 
   './index.html', 
