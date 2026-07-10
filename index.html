@@ -1618,9 +1618,12 @@ function renderDashboard(){
 function renderRecordsTable(){
   const tbody = document.getElementById('records-tbody');
   const isSA = currentUser && currentUser.role==='superadmin';
+  
   document.getElementById('th-actions').style.display = isSA ? '':'none';
-  document.getElementById('th-select').style.display = isSA ? '':'none';
   document.getElementById('th-assigned').style.display = isSA ? '':'none';
+  
+  // CHANGED: Make the selection column visible to ALL users so they can choose what to print
+  document.getElementById('th-select').style.display = ''; 
 
   // Populate / refresh the bulk-assign user dropdown (superadmin only)
   const bulkSelect = document.getElementById('bulk-assign-select');
@@ -1629,12 +1632,16 @@ function renderRecordsTable(){
     bulkSelect.innerHTML = '<option value="">— Unassign —</option>' +
       assignable.map(u => `<option value="${esc(u)}">${esc(userMeta[u].label)} (${esc(u)})</option>`).join('');
   }
+  
+  // Note: updateBulkAssignBar() already has a built-in check so non-superadmins won't see the assignment menu even when they check boxes!
   updateBulkAssignBar();
 
   if(!records.length){
-    tbody.innerHTML=`<tr><td colspan="${isSA?12:9}" style="text-align:center;color:var(--text-dim);padding:2rem">No records found</td></tr>`;
+    // CHANGED: Updated the colspan for non-admins to account for the newly visible select column
+    tbody.innerHTML=`<tr><td colspan="${isSA?12:10}" style="text-align:center;color:var(--text-dim);padding:2rem">No records found</td></tr>`;
     return;
   }
+  
   tbody.innerHTML = records.map((r,ri)=>{
     const {pct}=calcProgress(r);
     const cl=pct===100?'pct-high':pct>0?'pct-mid':'pct-low';
@@ -1665,15 +1672,17 @@ function renderRecordsTable(){
            </div>
          </td>`
       : `<td style="font-size:.8rem;color:var(--text-sec)">${esc(remark)||'<span style="color:var(--text-dim)">—</span>'}</td>`;
+      
     const actionsCell = isSA
       ? `<td style="white-space:nowrap">
            <button class="btn-edit" onclick="openEditModal(${ri})">✎ Edit</button>
            <button class="btn-del"  onclick="deleteRecord(${ri})">✕ Delete</button>
          </td>`
       : '';
-    const selectCell = isSA
-      ? `<td style="text-align:center"><input type="checkbox" class="rec-select-cb" ${selectedRecordIndices.has(ri) ? 'checked' : ''} onchange="toggleRecordSelect(${ri}, this.checked)"></td>`
-      : '';
+      
+    // CHANGED: Removed the `isSA ?` restriction so every user gets the checkbox rendered
+    const selectCell = `<td style="text-align:center"><input type="checkbox" class="rec-select-cb" ${selectedRecordIndices.has(ri) ? 'checked' : ''} onchange="toggleRecordSelect(${ri}, this.checked)"></td>`;
+    
     const assignedCell = isSA
       ? `<td>
            <select onchange="assignRecordUser(${ri}, this.value)" style="padding:.28rem .5rem;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.75rem;font-family:var(--sans);outline:none;">
@@ -1682,6 +1691,7 @@ function renderRecordsTable(){
            </select>
          </td>`
       : '';
+      
     return `<tr>
       ${selectCell}
       <td><span class="record-type ${r.type.toLowerCase()}">${r.type}</span></td>
@@ -1698,7 +1708,7 @@ function renderRecordsTable(){
     </tr>`;
   }).join('');
 }
-
+  
 // ════════════════════════════════════════════════
 //  EXPORT TO CSV
 // ════════════════════════════════════════════════
@@ -1876,12 +1886,25 @@ function exportToXLSX() {
 //  ✅ FIX 11: PRINT / PDF REPORT
 // ════════════════════════════════════════════════
 function printReport() {
-  if (!records || records.length === 0) { showToast('No records to print', 'err'); return; }
+  if (!records || records.length === 0) { 
+    showToast('No records to print', 'err'); 
+    return; 
+  }
+
+  // 1. Determine which records to print based on checkbox selection
+  let targetRecords = records;
+  if (typeof selectedRecordIndices !== 'undefined' && selectedRecordIndices.size > 0) {
+    targetRecords = Array.from(selectedRecordIndices).map(ri => records[ri]);
+  }
+
   const container = document.getElementById('print-report');
-  container.innerHTML = records.map(r => {
+  
+  // 2. Loop through the targetRecords instead of all records
+  container.innerHTML = targetRecords.map(r => {
     const { pct } = calcProgress(r);
     const applicable = ['DA','DB','TA'].filter(k => r.applicable[k]);
     const headerCols = applicable.map(c => `<th>${c}</th>`).join('');
+    
     const rows = Array.from({ length: r.trainSets }, (_, i) => {
       const cd = r.checks[i] || {};
       const s = tsStatus(r, i);
@@ -1895,7 +1918,9 @@ function printReport() {
         <td>${cd.remark||''}</td>
       </tr>`;
     }).join('');
+    
     const completedLine = r.completedAt ? ` &nbsp;|&nbsp; <strong>Completed:</strong> ${new Date(r.completedAt).toLocaleString()}` : '';
+    
     return `<div class="print-page">
       <div class="print-title">${r.type} — ${r.ref}</div>
       <div class="print-sub">${r.desc}${r.remark ? ` | Remark: ${r.remark}` : ''}</div>
@@ -1907,9 +1932,15 @@ function printReport() {
       <div style="margin-top:1.5rem;font-size:.75rem;color:#999;">Generated: ${new Date().toLocaleString()}</div>
     </div>`;
   }).join('');
-  addAudit('Printed compliance report');
+  
+  // 3. Update the audit log to reflect what was printed
+  const auditMsg = targetRecords.length === records.length 
+    ? 'Printed complete compliance report' 
+    : `Printed compliance report for ${targetRecords.length} selected record(s)`;
+  
+  addAudit(auditMsg);
   window.print();
-}
+} 
   
 // ════════════════════════════════════════════════
 //  ADMIN — COMPLIANCE CHECKS
