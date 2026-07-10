@@ -2102,13 +2102,13 @@ function autoFillDate(ri, ti) {
         </div>`;
   }
 
-  function renderChecks(){
+function renderChecks(){
   const container = document.getElementById('checks-list');
   const openAccordions = Array.from(document.querySelectorAll('.check-record-body.open')).map(el => el.id);
 
   if(!records.length){ container.innerHTML=`<div class="empty-state"><div class="icon">📋</div><p>No records available. Ask Super Admin to create records first.</p></div>`; return; }
 
-    // ✅ FIX 5: Apply search + type + status filters
+  // Apply search + type + status filters
   const searchVal = (document.getElementById('checks-search')?.value || '').toLowerCase();
   const filteredRecords = records.map((r, ri) => ({ r, ri })).filter(({ r }) => {
     if (checksFilter.type && r.type !== checksFilter.type) return false;
@@ -2127,7 +2127,7 @@ function autoFillDate(ri, ti) {
     return;
   }
  
-  // ✅ PERF FIX: Only build the cheap header for every record. Heavy
+  // Only build the cheap header for every record. Heavy
   // per-train-set rows are only built for already-expanded records.
   container.innerHTML = filteredRecords.map(({ r, ri }) => {
     const {pct}=calcProgress(r);
@@ -2144,32 +2144,33 @@ function autoFillDate(ri, ti) {
     const isOpen = openAccordions.includes('acc-'+ri);
     const bodyHtml = isOpen ? buildTsBodyHtml(ri) : '';
 
-return `<div class="ts-check-row" style="flex-wrap:wrap;gap:.5rem">
-        <span class="ts-check-label">Train Set ${ti+1} <span class="ts-chip ${s}" style="margin-left:.5rem">TS${ti+1}</span>
-  <span class="ts-live-chip ${s}" id="live-chip-${ri}-${ti}">${s.charAt(0).toUpperCase()+s.slice(1)}</span>
-</span>
-        <div class="ts-checks">${checks}${manualPartialHtml}</div>
-        <div style="display:flex;align-items:center;gap:.5rem;width:100%;margin-top:.35rem;flex-wrap:wrap;">
-
-          <input type="text" id="emp-${ri}-${ti}" value="${esc(existingEmp)}" placeholder="Emp ID" ${disabledAttr}
-          oninput="isDirty=true;"
-            style="width:90px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isReadOnly ? 'opacity:0.6; cursor:not-allowed;' : ''}"
-            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-
-          <input type="date" id="date-${ri}-${ti}" value="${esc(existingDate)}" ${disabledAttr}
-          oninput="isDirty=true;"
-            style="width:125px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;color-scheme:dark; ${isReadOnly ? 'opacity:0.6; cursor:not-allowed;' : ''}"
-            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-
-          <input type="text" id="rmk-${ri}-${ti}" value="${esc(existingRemark)}" placeholder="Remarks…" ${disabledAttr}
-          oninput="isDirty=true;"
-            style="flex:1;min-width:150px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isReadOnly ? 'opacity:0.6; cursor:not-allowed;' : ''}"
-            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-
-          ${isReadOnly ? '' : `<button onclick="saveSingleTsCheck(${ri}, ${ti}, this)" class="btn-save" style="padding:.35rem .85rem; font-size:.75rem; border-radius:var(--radius);">Save</button>`}
+    // PROPER ACCORDION WRAPPER RESTORED HERE
+    return `<div class="check-record">
+      <div class="check-record-header" onclick="toggleAccordion(${ri})">
+        <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+          <span class="record-type ${r.type.toLowerCase()}">${r.type}</span>
+          <div style="display:flex;flex-direction:column">
+            <span style="font-family:var(--mono);font-size:.8rem;color:var(--text-sec);line-height:1.2">${esc(r.ref)}</span>
+            <span style="font-size:.95rem;font-weight:600;color:var(--text-pri)">${esc(r.desc)}</span>
+          </div>
         </div>
-      </div>`;
-    }).join('');
+        <div style="display:flex;align-items:center;gap:1.5rem">
+          <div style="display:flex;gap:1rem;font-family:var(--mono);font-size:.75rem">
+            <span style="color:var(--success);font-weight:700" id="done-cnt-${ri}">${tsDoneCount} Done</span>
+            <span style="color:var(--warn);font-weight:700" id="part-cnt-${ri}">${tsPartialCount} Partial</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:.75rem">
+            <span style="font-size:.85rem;font-family:var(--mono);font-weight:700;color:var(--text-pri)" id="pct-text-${ri}">${pct}%</span>
+            <div style="width:80px;height:6px;background:var(--bg-deep);border-radius:3px;overflow:hidden">
+              <div id="pct-bar-${ri}" class="progress-bar-fill ${fc}" style="width:${pct}%"></div>
+            </div>
+            <span class="chevron" id="chevron-${ri}">▼</span>
+          </div>
+        </div>
+      </div>
+      <div class="check-record-body" id="acc-${ri}" data-rendered="${isOpen?'1':'0'}">${bodyHtml}</div>
+    </div>`;
+  }).join('');
 
   openAccordions.forEach(id => {
     const body = document.getElementById(id);
