@@ -313,6 +313,21 @@
   .modal-ts-counter .count{font-size:1.2rem;font-weight:700;font-family:var(--mono);
     color:var(--accent);min-width:2rem;text-align:center}
 
+  /* ── Matrix Report Styles ── */
+  #matrix-table th { font-size:.65rem; padding:.4rem; text-align:center; border:1px solid var(--border); }
+  #matrix-table td { font-size:.7rem; padding:.3rem; border:1px solid var(--border); }
+  .mc-done { background:#22C55E15; color:var(--success); font-weight:700; text-align:center; }
+  .mc-partial { background:#F59E0B15; color:var(--warn); font-weight:700; text-align:center; }
+  .mc-pending { color:var(--text-dim); text-align:center; }
+  .mc-na { opacity:0.3; background:var(--bg-deep); color:var(--text-dim); text-align:center; }
+  
+  @media print {
+    @page { size: landscape; margin: 10mm; }
+    .print-matrix-table { width:100%; border-collapse:collapse; font-size:7px; font-family:sans-serif; }
+    .print-matrix-table th, .print-matrix-table td { border:1px solid #ccc; padding:2px; text-align:center; }
+    .print-matrix-table th { background:#eee; color:#000; font-weight:bold; }
+  }
+  
   /* ── Settings Panel ── */
   .settings-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem}
   .pw-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem}
@@ -525,6 +540,9 @@
       <div class="nav-item" id="nav-records" onclick="showPanel('records')">
         <span class="nav-icon">≡</span> All Records
       </div>
+      <div class="nav-item" id="nav-matrix" onclick="showPanel('matrix')">
+        <span class="nav-icon">▦</span> Matrix Report
+      </div>
       <div class="nav-item" id="nav-checks" onclick="showPanel('checks')" style="display:none">
         <span class="nav-icon">✓</span> Fleet/HECP/SECP Status
       </div>
@@ -627,6 +645,35 @@
             </button>
           </div>
         </div>
+        <div class="panel" id="panel-matrix">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:0.5rem; margin-bottom: 1.25rem;">
+          <div>
+            <div class="panel-title">Matrix Report</div>
+            <div class="panel-sub" id="matrix-sub" style="margin-bottom: 0.5rem;">Detailed Train Set breakdown across all records</div>
+          </div>
+          
+          <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button onclick="exportMatrixToXLSX()" 
+              style="padding:.4rem .8rem;background:transparent;border:1px solid var(--success);border-radius:var(--radius);color:var(--success);font-size:.8rem;cursor:pointer;font-family:var(--sans);font-weight:600;">
+              ↓ Export Excel
+            </button>
+            <button onclick="printMatrixReport()"
+              style="padding:.4rem .8rem;background:transparent;border:1px solid var(--text-sec);border-radius:var(--radius);color:var(--text-sec);font-size:.8rem;cursor:pointer;font-family:var(--sans);font-weight:600;">
+              ⎙ Print / PDF
+            </button>
+          </div>
+        </div>
+        
+        <div class="table-wrap" style="max-height: 65vh; overflow: auto;">
+          <table id="matrix-table" style="white-space: nowrap;">
+            <thead style="position: sticky; top: 0; z-index: 10;">
+              <tr id="matrix-thead-row">
+                </tr>
+            </thead>
+            <tbody id="matrix-tbody"></tbody>
+          </table>
+        </div>
+      </div>
         <div id="bulk-assign-bar" style="display:none;align-items:center;gap:.6rem;margin:.75rem 0;padding:.6rem .8rem;background:var(--bg-input);border:1px solid var(--accent);border-radius:var(--radius);flex-wrap:wrap;">
           <span style="font-size:.82rem;color:var(--text-pri)"><b id="bulk-assign-count">0</b> record(s) selected</span>
           <select id="bulk-assign-select" style="padding:.35rem .6rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.8rem;font-family:var(--sans);outline:none;">
@@ -714,6 +761,9 @@
     </div>
     <div class="bnav-item" onclick="showPanel('records')" id="bnav-records">
       <span class="bnav-icon">≡</span><span>Records</span>
+    </div>
+    <div class="bnav-item" onclick="showPanel('matrix')" id="bnav-matrix">
+      <span class="bnav-icon">▦</span><span>Matrix</span>
     </div>
     <div class="bnav-item" onclick="showPanel('checks')" id="bnav-checks" style="display:none">
       <span class="bnav-icon">✓</span><span>Status</span>
@@ -1132,7 +1182,7 @@ function showPanel(id){
   if(bnav) bnav.classList.add('active');
 
   // 6. Render Data - Deferred to prevent UI freezing
-  const renders = { dashboard:renderDashboard, records:renderRecordsTable, checks:renderChecks, audit:renderAudit, settings:renderSettings };
+  const renders = { dashboard:renderDashboard, records:renderRecordsTable, checks:renderChecks, audit:renderAudit, settings:renderSettings, matrix:renderMatrix };
   if(renders[id]) {
     // Dim panel visually to indicate loading and prevent double clicks
     targetPanel.style.opacity = '0.5'; 
@@ -1723,6 +1773,160 @@ function renderRecordsTable(){
       ${actionsCell}
     </tr>`;
   }).join('');
+}
+
+// ════════════════════════════════════════════════
+//  MATRIX REPORT
+// ════════════════════════════════════════════════
+
+function renderMatrix() {
+  const thead = document.getElementById('matrix-thead-row');
+  const tbody = document.getElementById('matrix-tbody');
+
+  // 1. Build the 60+ column headers once
+  if (!thead.innerHTML) {
+    let h = `<th style="text-align:left;position:sticky;left:0;background:var(--bg-card);z-index:11;">Type</th>
+             <th style="text-align:left;position:sticky;left:50px;background:var(--bg-card);z-index:11;">Ref. No.</th>
+             <th style="text-align:center;">Status</th>`;
+    for(let i=1; i<=57; i++) { h += `<th>TS${String(i).padStart(2, '0')}</th>`; }
+    h += `<th>Total</th><th>Done</th><th>Partial</th><th>Pending</th>`;
+    thead.innerHTML = h;
+  }
+
+  if (!records.length) {
+    tbody.innerHTML = `<tr><td colspan="64" style="text-align:center;padding:2rem;">No records found</td></tr>`;
+    return;
+  }
+
+  // 2. Build rows
+  tbody.innerHTML = records.map(r => {
+    const { pct } = calcProgress(r);
+    let tsHtml = '';
+    let counts = { done: 0, partial: 0, pending: 0 };
+    
+    // Calculate every single TS column (1 to 57)
+    for(let i=0; i<57; i++){
+      if (i < r.trainSets) {
+        const s = tsStatus(r, i);
+        counts[s]++;
+        const sLabel = s === 'done' ? '✓' : s === 'partial' ? '◐' : '—';
+        tsHtml += `<td class="mc-${s}">${sLabel}</td>`;
+      } else {
+        tsHtml += `<td class="mc-na">N/A</td>`; // For trainsets beyond the record's scope
+      }
+    }
+
+    return `<tr>
+      <td style="position:sticky;left:0;background:var(--bg-card);border-right:1px solid var(--border);"><span class="record-type ${r.type.toLowerCase()}" style="margin:0;">${r.type}</span></td>
+      <td class="tbl-mono" style="font-weight:bold;position:sticky;left:50px;background:var(--bg-card);border-right:1px solid var(--border);">${esc(r.ref)}</td>
+      <td class="tbl-mono" style="text-align:center; color:${pct===100?'var(--success)':pct>0?'var(--warn)':'var(--text-sec)'}">${pct}%</td>
+      ${tsHtml}
+      <td class="tbl-mono" style="text-align:center;font-weight:bold;background:var(--bg-hover)">${r.trainSets}</td>
+      <td class="tbl-mono" style="text-align:center;color:var(--success);background:var(--bg-hover)">${counts.done}</td>
+      <td class="tbl-mono" style="text-align:center;color:var(--warn);background:var(--bg-hover)">${counts.partial}</td>
+      <td class="tbl-mono" style="text-align:center;color:var(--text-sec);background:var(--bg-hover)">${counts.pending}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportMatrixToXLSX() {
+  if (!records || !records.length) return showToast('No records to export', 'err');
+  
+  const rows = [];
+  
+  // Build Header Row
+  const header = ['Type', 'Ref. No.', 'Status %'];
+  for(let i=1; i<=57; i++) { header.push(`TS${String(i).padStart(2,'0')}`); }
+  header.push('Total TS', 'Completed', 'Partial', 'Pending');
+  rows.push(header);
+  
+  // Build Data Rows
+  records.forEach(r => {
+    const { pct } = calcProgress(r);
+    const row = [r.type, r.ref, pct];
+    let counts = { done: 0, partial: 0, pending: 0 };
+    
+    for(let i=0; i<57; i++){
+      if (i < r.trainSets) {
+        const s = tsStatus(r, i);
+        counts[s]++;
+        row.push(s.charAt(0).toUpperCase() + s.slice(1)); // e.g. "Done", "Partial"
+      } else {
+        row.push('N/A');
+      }
+    }
+    row.push(r.trainSets, counts.done, counts.partial, counts.pending);
+    rows.push(row);
+  });
+  
+  try {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    
+    // Freeze the first two columns (Type, Ref) and the top header row
+    ws['!views'] = [{ state: 'frozen', xSplit: 2, ySplit: 1 }];
+    
+    XLSX.utils.book_append_sheet(wb, ws, 'Matrix Report');
+    XLSX.writeFile(wb, `FHS_Matrix_Export_${new Date().toISOString().slice(0,10)}.xlsx`);
+    addAudit('Exported Matrix Report to Excel');
+    showToast('Excel export successful');
+  } catch (err) {
+    showToast('Failed to generate Excel', 'err');
+  }
+}
+
+function printMatrixReport() {
+  if (!records || !records.length) return showToast('No records to print', 'err');
+  
+  const container = document.getElementById('print-report');
+  
+  // Build headers
+  let thHtml = `<th>Type</th><th>Ref. No.</th><th>Status</th>`;
+  for(let i=1; i<=57; i++) { thHtml += `<th>${String(i).padStart(2, '0')}</th>`; }
+  thHtml += `<th>Total</th><th>Done</th><th>Part</th><th>Pend</th>`;
+
+  // Build rows
+  const trHtml = records.map(r => {
+    const { pct } = calcProgress(r);
+    let tsHtml = '';
+    let counts = { done: 0, partial: 0, pending: 0 };
+    
+    for(let i=0; i<57; i++){
+      if (i < r.trainSets) {
+        const s = tsStatus(r, i);
+        counts[s]++;
+        const sLabel = s === 'done' ? '✓' : s === 'partial' ? '◐' : '—';
+        const color = s === 'done' ? '#16a34a' : s === 'partial' ? '#d97706' : '#555';
+        tsHtml += `<td style="color:${color}">${sLabel}</td>`;
+      } else {
+        tsHtml += `<td style="background:#eee;color:#aaa"></td>`;
+      }
+    }
+    return `<tr>
+      <td style="text-align:left;font-weight:bold">${r.type}</td>
+      <td style="text-align:left">${r.ref}</td>
+      <td>${pct}%</td>
+      ${tsHtml}
+      <td style="font-weight:bold">${r.trainSets}</td>
+      <td style="color:#16a34a">${counts.done}</td>
+      <td style="color:#d97706">${counts.partial}</td>
+      <td>${counts.pending}</td>
+    </tr>`;
+  }).join('');
+  
+  container.innerHTML = `
+    <div class="print-matrix-page" style="page-break-after:avoid;">
+      <h2 style="margin-bottom:5px;font-family:sans-serif">Fleet/HECP/SECP Matrix Report</h2>
+      <p style="margin-bottom:15px;font-size:10px;font-family:sans-serif;color:#555">Generated: ${new Date().toLocaleString()}</p>
+      <table class="print-matrix-table">
+        <thead><tr>${thHtml}</tr></thead>
+        <tbody>${trHtml}</tbody>
+      </table>
+    </div>
+  `;
+  
+  addAudit('Printed Matrix Report');
+  window.print();
 }
   
 // ════════════════════════════════════════════════
