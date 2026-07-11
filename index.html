@@ -678,7 +678,7 @@
       </div>
 
       <div class="panel" id="panel-matrix">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:0.5rem; margin-bottom: 1.25rem;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:0.5rem; margin-bottom: 0.75rem;">
           <div>
             <div class="panel-title">Matrix Report</div>
             <div class="panel-sub" id="matrix-sub" style="margin-bottom: 0.5rem;">Detailed Train Set breakdown across all records</div>
@@ -695,10 +695,20 @@
             </button>
           </div>
         </div>
+
+        <div style="display:flex; gap:0.4rem; margin-bottom: 1rem; flex-wrap: wrap; align-items:center;">
+          <span style="font-size:0.75rem; color:var(--text-sec); margin-right:0.5rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Toggle Columns:</span>
+          <button class="cf-btn active" onclick="toggleMatrixCol('type', this)">Type</button>
+          <button class="cf-btn active" onclick="toggleMatrixCol('ref', this)">Ref No.</button>
+          <button class="cf-btn active" onclick="toggleMatrixCol('desc', this)">Description</button>
+          <button class="cf-btn active" onclick="toggleMatrixCol('status', this)">Status</button>
+          <button class="cf-btn active" onclick="toggleMatrixCol('ts', this)">TS Checks (1-57)</button>
+          <button class="cf-btn active" onclick="toggleMatrixCol('summary', this)">Summary</button>
+        </div>
         
         <div class="table-wrap" style="max-height: 78vh; overflow: auto;">
           <table id="matrix-table" style="white-space: nowrap;">
-            <thead style="position: sticky; top: 0; z-index: 10;">
+            <thead style="position: sticky; top: 0; z-index: 15;">
               <tr id="matrix-thead-row">
                 </tr>
             </thead>
@@ -706,6 +716,7 @@
           </table>
         </div>
       </div>
+      
   <div class="panel" id="panel-checks">
   <div class="panel-title">Fleet/HECP/SECP Status</div>
   <div class="panel-sub">Mark completed car checks per train set for each record</div>
@@ -1780,17 +1791,41 @@ function renderRecordsTable(){
 //  MATRIX REPORT
 // ════════════════════════════════════════════════
 
+// State to track which columns are visible
+let matrixColState = { type: true, ref: true, desc: true, status: true, ts: true, summary: true };
+
+function toggleMatrixCol(col, btn) {
+  matrixColState[col] = !matrixColState[col];
+  btn.classList.toggle('active', matrixColState[col]);
+  renderMatrix(); // Instantly re-render with adjusted sticky positions
+}
+
 function renderMatrix() {
   const thead = document.getElementById('matrix-thead-row');
   const tbody = document.getElementById('matrix-tbody');
 
-  // 1. Force rebuild headers with fixed widths for sticky alignment
-  let h = `<th style="text-align:left;position:sticky;left:0;background:var(--bg-card);z-index:12;width:75px;min-width:75px;">Type</th>
-           <th style="text-align:left;position:sticky;left:75px;background:var(--bg-card);z-index:12;width:140px;min-width:140px;">Ref. No.</th>
-           <th style="text-align:left;position:sticky;left:215px;background:var(--bg-card);z-index:12;width:250px;min-width:250px;border-right:2px solid var(--border);">Description</th>
-           <th style="text-align:center;">Status</th>`;
-  for(let i=1; i<=57; i++) { h += `<th>TS${String(i).padStart(2, '0')}</th>`; }
-  h += `<th>Total</th><th>Done</th><th>Partial</th><th>Pending</th>`;
+  // 1. Calculate dynamic left offsets for frozen columns
+  let leftOffset = 0;
+  let typeLeft = -1, refLeft = -1, descLeft = -1, statusLeft = -1;
+  
+  if (matrixColState.type) { typeLeft = leftOffset; leftOffset += 75; }
+  if (matrixColState.ref) { refLeft = leftOffset; leftOffset += 140; }
+  if (matrixColState.desc) { descLeft = leftOffset; leftOffset += 350; } // Increased Description Width to 350px
+  if (matrixColState.status) { statusLeft = leftOffset; leftOffset += 110; }
+
+  // 2. Build Headers dynamically
+  let h = '';
+  if (matrixColState.type) h += `<th style="text-align:left;position:sticky;left:${typeLeft}px;background:var(--bg-card);z-index:12;width:75px;min-width:75px;">Type</th>`;
+  if (matrixColState.ref) h += `<th style="text-align:left;position:sticky;left:${refLeft}px;background:var(--bg-card);z-index:12;width:140px;min-width:140px;">Ref. No.</th>`;
+  if (matrixColState.desc) h += `<th style="text-align:left;position:sticky;left:${descLeft}px;background:var(--bg-card);z-index:12;width:350px;min-width:350px;max-width:350px;">Description</th>`;
+  if (matrixColState.status) h += `<th style="text-align:center;position:sticky;left:${statusLeft}px;background:var(--bg-card);z-index:12;width:110px;min-width:110px;border-right:2px solid var(--border);">Status</th>`;
+  
+  if (matrixColState.ts) {
+    for(let i=1; i<=57; i++) h += `<th>TS${String(i).padStart(2, '0')}</th>`;
+  }
+  if (matrixColState.summary) {
+    h += `<th>Total</th><th>Done</th><th>Partial</th><th>Pending</th>`;
+  }
   thead.innerHTML = h;
 
   if (!records.length) {
@@ -1798,13 +1833,19 @@ function renderMatrix() {
     return;
   }
 
-  // 2. Build rows with matching exact widths and left offsets
+  // 3. Build Rows dynamically
   tbody.innerHTML = records.map(r => {
     const { pct } = calcProgress(r);
+    
+    // Status text formatting
+    let statusText = 'Yet to Start';
+    let statusColor = 'var(--text-sec)';
+    if (pct === 100) { statusText = 'Completed'; statusColor = 'var(--success)'; }
+    else if (pct > 0) { statusText = 'In Progress'; statusColor = 'var(--warn)'; }
+
+    // Generate TS Cells
     let tsHtml = '';
     let counts = { done: 0, partial: 0, pending: 0 };
-    
-    // Calculate every single TS column (1 to 57)
     for(let i=0; i<57; i++){
       if (i < r.trainSets) {
         const s = tsStatus(r, i);
@@ -1816,65 +1857,75 @@ function renderMatrix() {
       }
     }
 
-    // CHANGED: Convert percentage to Text Status
-    let statusText = 'Yet to Start';
-    let statusColor = 'var(--text-sec)';
-    if (pct === 100) { statusText = 'Completed'; statusColor = 'var(--success)'; }
-    else if (pct > 0) { statusText = 'In Progress'; statusColor = 'var(--warn)'; }
+    let rowHtml = '';
+    if (matrixColState.type) rowHtml += `<td style="position:sticky;left:${typeLeft}px;background:var(--bg-card);z-index:10;width:75px;min-width:75px;border-right:1px solid var(--border);"><span class="record-type ${r.type.toLowerCase()}" style="margin:0;">${r.type}</span></td>`;
+    
+    if (matrixColState.ref) rowHtml += `<td class="tbl-mono" style="font-weight:bold;position:sticky;left:${refLeft}px;background:var(--bg-card);z-index:10;white-space:nowrap;width:140px;min-width:140px;border-right:1px solid var(--border);">${esc(r.ref)}</td>`;
+    
+    if (matrixColState.desc) rowHtml += `<td style="position:sticky;left:${descLeft}px;background:var(--bg-card);z-index:10;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:350px;max-width:350px;" title="${esc(r.desc)}">${esc(r.desc)}</td>`;
+    
+    if (matrixColState.status) rowHtml += `<td style="text-align:center; font-size:0.75rem; font-weight:700; white-space:nowrap; color:${statusColor}; position:sticky; left:${statusLeft}px; background:var(--bg-card); z-index:10; border-right:2px solid var(--border); width:110px; min-width:110px;">${statusText}</td>`;
 
-    return `<tr>
-      <td style="position:sticky;left:0;background:var(--bg-card);border-right:1px solid var(--border);z-index:10;width:75px;min-width:75px;">
-        <span class="record-type ${r.type.toLowerCase()}" style="margin:0;">${r.type}</span>
-      </td>
-      <td class="tbl-mono" style="font-weight:bold;position:sticky;left:75px;background:var(--bg-card);border-right:1px solid var(--border);z-index:10;white-space:nowrap;width:140px;min-width:140px;">
-        ${esc(r.ref)}
-      </td>
-      <td style="position:sticky;left:215px;background:var(--bg-card);border-right:2px solid var(--border);z-index:10;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:250px;max-width:250px;" title="${esc(r.desc)}">
-        ${esc(r.desc)}
-      </td>
-      <td style="text-align:center; font-size:0.75rem; font-weight:700; white-space:nowrap; color:${statusColor}">${statusText}</td>
-      ${tsHtml}
-      <td class="tbl-mono" style="text-align:center;font-weight:bold;background:var(--bg-hover)">${r.trainSets}</td>
-      <td class="tbl-mono" style="text-align:center;color:var(--success);background:var(--bg-hover)">${counts.done}</td>
-      <td class="tbl-mono" style="text-align:center;color:var(--warn);background:var(--bg-hover)">${counts.partial}</td>
-      <td class="tbl-mono" style="text-align:center;color:var(--text-sec);background:var(--bg-hover)">${counts.pending}</td>
-    </tr>`;
+    if (matrixColState.ts) rowHtml += tsHtml;
+    
+    if (matrixColState.summary) {
+      rowHtml += `<td class="tbl-mono" style="text-align:center;font-weight:bold;background:var(--bg-hover)">${r.trainSets}</td>
+        <td class="tbl-mono" style="text-align:center;color:var(--success);background:var(--bg-hover)">${counts.done}</td>
+        <td class="tbl-mono" style="text-align:center;color:var(--warn);background:var(--bg-hover)">${counts.partial}</td>
+        <td class="tbl-mono" style="text-align:center;color:var(--text-sec);background:var(--bg-hover)">${counts.pending}</td>`;
+    }
+
+    return `<tr>${rowHtml}</tr>`;
   }).join('');
 }
 
 function exportMatrixToXLSX() {
   if (!records || !records.length) return showToast('No records to export', 'err');
-  
   const rows = [];
   
-  // Build Header Row (Changed 'Status %' to 'Status')
-  const header = ['Type', 'Ref. No.', 'Description', 'Status'];
-  for(let i=1; i<=57; i++) { header.push(`TS${String(i).padStart(2,'0')}`); }
-  header.push('Total TS', 'Completed', 'Partial', 'Pending');
+  // 1. Obey toggles for Excel Headers
+  const header = [];
+  if (matrixColState.type) header.push('Type');
+  if (matrixColState.ref) header.push('Ref. No.');
+  if (matrixColState.desc) header.push('Description');
+  if (matrixColState.status) header.push('Status');
+  if (matrixColState.ts) { for(let i=1; i<=57; i++) header.push(`TS${String(i).padStart(2,'0')}`); }
+  if (matrixColState.summary) header.push('Total TS', 'Completed', 'Partial', 'Pending');
   rows.push(header);
   
-  // Build Data Rows
+  // 2. Obey toggles for Excel Rows & Export Symbols
   records.forEach(r => {
     const { pct } = calcProgress(r);
-    
-    // CHANGED: Convert percentage to Text Status for Excel
     let statusText = 'Yet to Start';
     if (pct === 100) statusText = 'Completed';
     else if (pct > 0) statusText = 'In Progress';
 
-    const row = [r.type, r.ref, r.desc, statusText];
-    let counts = { done: 0, partial: 0, pending: 0 };
+    const row = [];
+    if (matrixColState.type) row.push(r.type);
+    if (matrixColState.ref) row.push(r.ref);
+    if (matrixColState.desc) row.push(r.desc);
+    if (matrixColState.status) row.push(statusText);
     
-    for(let i=0; i<57; i++){
-      if (i < r.trainSets) {
-        const s = tsStatus(r, i);
-        counts[s]++;
-        row.push(s.charAt(0).toUpperCase() + s.slice(1)); 
-      } else {
-        row.push('N/A');
+    let counts = { done: 0, partial: 0, pending: 0 };
+    if (matrixColState.ts) {
+      for(let i=0; i<57; i++){
+        if (i < r.trainSets) {
+          const s = tsStatus(r, i);
+          counts[s]++;
+          // Use exact symbols from UI instead of text
+          row.push(s === 'done' ? '✓' : s === 'partial' ? '◐' : '—');
+        } else {
+          row.push('');
+        }
       }
+    } else {
+      // Calculate counts anyway if summary is needed but TS is hidden
+      for(let i=0; i<r.trainSets; i++) counts[tsStatus(r, i)]++;
     }
-    row.push(r.trainSets, counts.done, counts.partial, counts.pending);
+
+    if (matrixColState.summary) {
+      row.push(r.trainSets, counts.done, counts.partial, counts.pending);
+    }
     rows.push(row);
   });
   
@@ -1882,7 +1933,14 @@ function exportMatrixToXLSX() {
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(rows);
     
-    ws['!views'] = [{ state: 'frozen', xSplit: 3, ySplit: 1 }];
+    // Dynamically calculate how many columns to freeze in Excel based on toggles
+    let freezeCount = 0;
+    if (matrixColState.type) freezeCount++;
+    if (matrixColState.ref) freezeCount++;
+    if (matrixColState.desc) freezeCount++;
+    if (matrixColState.status) freezeCount++;
+    
+    if (freezeCount > 0) ws['!views'] = [{ state: 'frozen', xSplit: freezeCount, ySplit: 1 }];
     
     XLSX.utils.book_append_sheet(wb, ws, 'Matrix Report');
     XLSX.writeFile(wb, `FHS_Matrix_Export_${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -1895,19 +1953,22 @@ function exportMatrixToXLSX() {
 
 function printMatrixReport() {
   if (!records || !records.length) return showToast('No records to print', 'err');
-  
   const container = document.getElementById('print-report');
   
-  // Build headers 
-  let thHtml = `<th>Type</th><th>Ref. No.</th><th>Description</th><th>Status</th>`;
-  for(let i=1; i<=57; i++) { thHtml += `<th>${String(i).padStart(2, '0')}</th>`; }
-  thHtml += `<th>Total</th><th>Done</th><th>Part</th><th>Pend</th>`;
+  // Obey toggles for Print Headers
+  let thHtml = '';
+  if(matrixColState.type) thHtml += `<th>Type</th>`;
+  if(matrixColState.ref) thHtml += `<th>Ref. No.</th>`;
+  if(matrixColState.desc) thHtml += `<th>Description</th>`;
+  if(matrixColState.status) thHtml += `<th>Status</th>`;
+  if(matrixColState.ts) { for(let i=1; i<=57; i++) thHtml += `<th>${String(i).padStart(2, '0')}</th>`; }
+  if(matrixColState.summary) thHtml += `<th>Total</th><th>Done</th><th>Part</th><th>Pend</th>`;
 
-  // Build rows
+  // Obey toggles for Print Rows
   const trHtml = records.map(r => {
     const { pct } = calcProgress(r);
-    let tsHtml = '';
     let counts = { done: 0, partial: 0, pending: 0 };
+    let tsHtml = '';
     
     for(let i=0; i<57; i++){
       if (i < r.trainSets) {
@@ -1921,23 +1982,20 @@ function printMatrixReport() {
       }
     }
 
-    // CHANGED: Convert percentage to Text Status for Print/PDF
     let statusText = 'Yet to Start';
     let statusColor = '#555';
     if (pct === 100) { statusText = 'Completed'; statusColor = '#16a34a'; }
     else if (pct > 0) { statusText = 'In Progress'; statusColor = '#d97706'; }
 
-    return `<tr>
-      <td style="text-align:left;font-weight:bold">${r.type}</td>
-      <td style="text-align:left">${r.ref}</td>
-      <td style="text-align:left;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(r.desc)}</td>
-      <td style="color:${statusColor}; font-weight:bold; font-size:10px;">${statusText}</td>
-      ${tsHtml}
-      <td style="font-weight:bold">${r.trainSets}</td>
-      <td style="color:#16a34a">${counts.done}</td>
-      <td style="color:#d97706">${counts.partial}</td>
-      <td>${counts.pending}</td>
-    </tr>`;
+    let rowHtml = '';
+    if(matrixColState.type) rowHtml += `<td style="text-align:left;font-weight:bold">${r.type}</td>`;
+    if(matrixColState.ref) rowHtml += `<td style="text-align:left">${r.ref}</td>`;
+    if(matrixColState.desc) rowHtml += `<td style="text-align:left;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(r.desc)}</td>`;
+    if(matrixColState.status) rowHtml += `<td style="color:${statusColor}; font-weight:bold; font-size:10px; white-space:nowrap;">${statusText}</td>`;
+    if(matrixColState.ts) rowHtml += tsHtml;
+    if(matrixColState.summary) rowHtml += `<td style="font-weight:bold">${r.trainSets}</td><td style="color:#16a34a">${counts.done}</td><td style="color:#d97706">${counts.partial}</td><td>${counts.pending}</td>`;
+
+    return `<tr>${rowHtml}</tr>`;
   }).join('');
   
   container.innerHTML = `
@@ -1953,7 +2011,7 @@ function printMatrixReport() {
   
   addAudit('Printed Matrix Report');
   window.print();
-} 
+}
   
 // ════════════════════════════════════════════════
 //  EXPORT TO CSV
