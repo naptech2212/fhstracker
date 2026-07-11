@@ -1026,19 +1026,28 @@ function doLogin(){
   }
 }
 
-// ✅ FIX 2 — New function
+// ✅ FIX 2 — New function (Updated to include exact time in filename)
 function autoBackup(dateStr) {
   const dataToBackup = {
     users: userMeta, passwords: passwords,
     records: records, audit: auditLog
   };
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToBackup, null, 2));
+  const dataStrEncoded = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToBackup, null, 2));
   const a = document.createElement('a');
-  a.setAttribute('href', dataStr);
-  a.setAttribute('download', `FHS_AutoBackup_${dateStr}.json`);
+  
+  // Format the time (e.g., 14-30-05) and combine with the date string
+  const now = new Date();
+  const timePart = now.toTimeString().slice(0, 8).replace(/:/g, '-');
+  const dateTimeStr = `${dateStr}_${timePart}`;
+  
+  a.setAttribute('href', dataStrEncoded);
+  a.setAttribute('download', `FHS_AutoBackup_${dateTimeStr}.json`);
+  
   document.body.appendChild(a);
   a.click();
   a.remove();
+  
+  // Keep storing just the dateStr in local memory so it doesn't trigger again today
   localStorage.setItem('fct_last_auto_backup', dateStr);
   showToast('Auto-backup downloaded for today ✓');
   addAudit('Auto-backup triggered on login');
