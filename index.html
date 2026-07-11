@@ -696,7 +696,7 @@
           </div>
         </div>
         
-        <div class="table-wrap" style="max-height: 65vh; overflow: auto;">
+        <div class="table-wrap" style="max-height: 78vh; overflow: auto;">
           <table id="matrix-table" style="white-space: nowrap;">
             <thead style="position: sticky; top: 0; z-index: 10;">
               <tr id="matrix-thead-row">
@@ -1784,11 +1784,10 @@ function renderMatrix() {
   const thead = document.getElementById('matrix-thead-row');
   const tbody = document.getElementById('matrix-tbody');
 
-  // 1. Force rebuild headers (Removed the buggy innerHTML check)
-  // Added Description column and adjusted sticky positioning
-  let h = `<th style="text-align:left;position:sticky;left:0;background:var(--bg-card);z-index:12;">Type</th>
-           <th style="text-align:left;position:sticky;left:65px;background:var(--bg-card);z-index:12;">Ref. No.</th>
-           <th style="text-align:left;min-width:200px;">Description</th>
+  // 1. Force rebuild headers with fixed widths for sticky alignment
+  let h = `<th style="text-align:left;position:sticky;left:0;background:var(--bg-card);z-index:12;width:75px;min-width:75px;">Type</th>
+           <th style="text-align:left;position:sticky;left:75px;background:var(--bg-card);z-index:12;width:140px;min-width:140px;">Ref. No.</th>
+           <th style="text-align:left;position:sticky;left:215px;background:var(--bg-card);z-index:12;width:250px;min-width:250px;border-right:2px solid var(--border);">Description</th>
            <th style="text-align:center;">Status</th>`;
   for(let i=1; i<=57; i++) { h += `<th>TS${String(i).padStart(2, '0')}</th>`; }
   h += `<th>Total</th><th>Done</th><th>Partial</th><th>Pending</th>`;
@@ -1799,7 +1798,7 @@ function renderMatrix() {
     return;
   }
 
-  // 2. Build rows
+  // 2. Build rows with matching exact widths and left offsets
   tbody.innerHTML = records.map(r => {
     const { pct } = calcProgress(r);
     let tsHtml = '';
@@ -1813,15 +1812,27 @@ function renderMatrix() {
         const sLabel = s === 'done' ? '✓' : s === 'partial' ? '◐' : '—';
         tsHtml += `<td class="mc-${s}">${sLabel}</td>`;
       } else {
-        tsHtml += `<td class="mc-na"></td>`; // Left blank for a cleaner look
+        tsHtml += `<td class="mc-na"></td>`; 
       }
     }
 
+    // CHANGED: Convert percentage to Text Status
+    let statusText = 'Yet to Start';
+    let statusColor = 'var(--text-sec)';
+    if (pct === 100) { statusText = 'Completed'; statusColor = 'var(--success)'; }
+    else if (pct > 0) { statusText = 'In Progress'; statusColor = 'var(--warn)'; }
+
     return `<tr>
-      <td style="position:sticky;left:0;background:var(--bg-card);border-right:1px solid var(--border);z-index:10;"><span class="record-type ${r.type.toLowerCase()}" style="margin:0;">${r.type}</span></td>
-      <td class="tbl-mono" style="font-weight:bold;position:sticky;left:65px;background:var(--bg-card);border-right:1px solid var(--border);z-index:10;white-space:nowrap;">${esc(r.ref)}</td>
-      <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;" title="${esc(r.desc)}">${esc(r.desc)}</td>
-      <td class="tbl-mono" style="text-align:center; color:${pct===100?'var(--success)':pct>0?'var(--warn)':'var(--text-sec)'}">${pct}%</td>
+      <td style="position:sticky;left:0;background:var(--bg-card);border-right:1px solid var(--border);z-index:10;width:75px;min-width:75px;">
+        <span class="record-type ${r.type.toLowerCase()}" style="margin:0;">${r.type}</span>
+      </td>
+      <td class="tbl-mono" style="font-weight:bold;position:sticky;left:75px;background:var(--bg-card);border-right:1px solid var(--border);z-index:10;white-space:nowrap;width:140px;min-width:140px;">
+        ${esc(r.ref)}
+      </td>
+      <td style="position:sticky;left:215px;background:var(--bg-card);border-right:2px solid var(--border);z-index:10;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:250px;max-width:250px;" title="${esc(r.desc)}">
+        ${esc(r.desc)}
+      </td>
+      <td style="text-align:center; font-size:0.75rem; font-weight:700; white-space:nowrap; color:${statusColor}">${statusText}</td>
       ${tsHtml}
       <td class="tbl-mono" style="text-align:center;font-weight:bold;background:var(--bg-hover)">${r.trainSets}</td>
       <td class="tbl-mono" style="text-align:center;color:var(--success);background:var(--bg-hover)">${counts.done}</td>
@@ -1836,8 +1847,8 @@ function exportMatrixToXLSX() {
   
   const rows = [];
   
-  // Build Header Row (Added Description)
-  const header = ['Type', 'Ref. No.', 'Description', 'Status %'];
+  // Build Header Row (Changed 'Status %' to 'Status')
+  const header = ['Type', 'Ref. No.', 'Description', 'Status'];
   for(let i=1; i<=57; i++) { header.push(`TS${String(i).padStart(2,'0')}`); }
   header.push('Total TS', 'Completed', 'Partial', 'Pending');
   rows.push(header);
@@ -1845,15 +1856,20 @@ function exportMatrixToXLSX() {
   // Build Data Rows
   records.forEach(r => {
     const { pct } = calcProgress(r);
-    // Added r.desc to the exported row
-    const row = [r.type, r.ref, r.desc, pct];
+    
+    // CHANGED: Convert percentage to Text Status for Excel
+    let statusText = 'Yet to Start';
+    if (pct === 100) statusText = 'Completed';
+    else if (pct > 0) statusText = 'In Progress';
+
+    const row = [r.type, r.ref, r.desc, statusText];
     let counts = { done: 0, partial: 0, pending: 0 };
     
     for(let i=0; i<57; i++){
       if (i < r.trainSets) {
         const s = tsStatus(r, i);
         counts[s]++;
-        row.push(s.charAt(0).toUpperCase() + s.slice(1)); // e.g. "Done", "Partial"
+        row.push(s.charAt(0).toUpperCase() + s.slice(1)); 
       } else {
         row.push('N/A');
       }
@@ -1866,7 +1882,6 @@ function exportMatrixToXLSX() {
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(rows);
     
-    // Freeze the first THREE columns (Type, Ref, Description) and the top header row
     ws['!views'] = [{ state: 'frozen', xSplit: 3, ySplit: 1 }];
     
     XLSX.utils.book_append_sheet(wb, ws, 'Matrix Report');
@@ -1883,7 +1898,7 @@ function printMatrixReport() {
   
   const container = document.getElementById('print-report');
   
-  // Build headers (Added Description)
+  // Build headers 
   let thHtml = `<th>Type</th><th>Ref. No.</th><th>Description</th><th>Status</th>`;
   for(let i=1; i<=57; i++) { thHtml += `<th>${String(i).padStart(2, '0')}</th>`; }
   thHtml += `<th>Total</th><th>Done</th><th>Part</th><th>Pend</th>`;
@@ -1905,11 +1920,18 @@ function printMatrixReport() {
         tsHtml += `<td style="background:#eee;color:#aaa"></td>`;
       }
     }
+
+    // CHANGED: Convert percentage to Text Status for Print/PDF
+    let statusText = 'Yet to Start';
+    let statusColor = '#555';
+    if (pct === 100) { statusText = 'Completed'; statusColor = '#16a34a'; }
+    else if (pct > 0) { statusText = 'In Progress'; statusColor = '#d97706'; }
+
     return `<tr>
       <td style="text-align:left;font-weight:bold">${r.type}</td>
       <td style="text-align:left">${r.ref}</td>
       <td style="text-align:left;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(r.desc)}</td>
-      <td>${pct}%</td>
+      <td style="color:${statusColor}; font-weight:bold; font-size:10px;">${statusText}</td>
       ${tsHtml}
       <td style="font-weight:bold">${r.trainSets}</td>
       <td style="color:#16a34a">${counts.done}</td>
@@ -1931,7 +1953,7 @@ function printMatrixReport() {
   
   addAudit('Printed Matrix Report');
   window.print();
-}  
+} 
   
 // ════════════════════════════════════════════════
 //  EXPORT TO CSV
