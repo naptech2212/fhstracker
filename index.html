@@ -645,7 +645,39 @@
             </button>
           </div>
         </div>
-        <div class="panel" id="panel-matrix">
+        
+        <div id="bulk-assign-bar" style="display:none;align-items:center;gap:.6rem;margin:.75rem 0;padding:.6rem .8rem;background:var(--bg-input);border:1px solid var(--accent);border-radius:var(--radius);flex-wrap:wrap;">
+          <span style="font-size:.82rem;color:var(--text-pri)"><b id="bulk-assign-count">0</b> record(s) selected</span>
+          <select id="bulk-assign-select" style="padding:.35rem .6rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.8rem;font-family:var(--sans);outline:none;">
+            <option value="">— Unassign —</option>
+          </select>
+          <button onclick="bulkAssignRecords()" class="btn-save" style="padding:.35rem .9rem;font-size:.8rem;">Assign Selected</button>
+          <button onclick="clearRecordSelection()" class="btn-cancel" style="padding:.35rem .9rem;font-size:.8rem;">Clear Selection</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th id="th-select" style="display:none"><input type="checkbox" id="rec-select-all" onchange="toggleSelectAllRecords(this.checked)"></th>
+                <th>Type</th>
+                <th>Reference</th>
+                <th>Description</th>
+                <th>Train Sets</th>
+                <th>Applicable</th>
+                <th>Completed TS</th>
+                <th>Partial TS</th>
+                <th>Progress</th>
+                <th>Remarks</th>
+                <th id="th-assigned" style="display:none">Assigned To</th>
+                <th id="th-actions" style="display:none">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="records-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-matrix">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:0.5rem; margin-bottom: 1.25rem;">
           <div>
             <div class="panel-title">Matrix Report</div>
@@ -674,37 +706,6 @@
           </table>
         </div>
       </div>
-        <div id="bulk-assign-bar" style="display:none;align-items:center;gap:.6rem;margin:.75rem 0;padding:.6rem .8rem;background:var(--bg-input);border:1px solid var(--accent);border-radius:var(--radius);flex-wrap:wrap;">
-          <span style="font-size:.82rem;color:var(--text-pri)"><b id="bulk-assign-count">0</b> record(s) selected</span>
-          <select id="bulk-assign-select" style="padding:.35rem .6rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.8rem;font-family:var(--sans);outline:none;">
-            <option value="">— Unassign —</option>
-          </select>
-          <button onclick="bulkAssignRecords()" class="btn-save" style="padding:.35rem .9rem;font-size:.8rem;">Assign Selected</button>
-          <button onclick="clearRecordSelection()" class="btn-cancel" style="padding:.35rem .9rem;font-size:.8rem;">Clear Selection</button>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              		<tr>
-                		<th id="th-select" style="display:none"><input type="checkbox" id="rec-select-all" onchange="toggleSelectAllRecords(this.checked)"></th>
-                		<th>Type</th>
-                		<th>Reference</th>
-                		<th>Description</th>
-                		<th>Train Sets</th>
-                		<th>Applicable</th>
-                		<th>Completed TS</th>
-                		<th>Partial TS</th>
-                		<th>Progress</th>
-                		<th>Remarks</th>
-                		<th id="th-assigned" style="display:none">Assigned To</th>
-                		<th id="th-actions" style="display:none">Actions</th>
-              		</tr>
-            		</thead>
-            <tbody id="records-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-
   <div class="panel" id="panel-checks">
   <div class="panel-title">Fleet/HECP/SECP Status</div>
   <div class="panel-sub">Mark completed car checks per train set for each record</div>
