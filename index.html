@@ -894,7 +894,17 @@ const DEFAULT_USERS = {
 
 let userMeta    = { ...DEFAULT_USERS };
 let passwords   = { ...DEFAULT_PASSWORDS };
-let currentUser = JSON.parse(localStorage.getItem('fct_session')) || null;
+let currentUser = null;
+try {
+  // Safe parsing to prevent old invalid session strings from crashing the app
+  const stored = localStorage.getItem('fct_session');
+  if (stored) {
+    const parsed = JSON.parse(stored);
+    if (typeof parsed === 'object') currentUser = parsed;
+  }
+} catch (e) {
+  localStorage.removeItem('fct_session');
+}
 let records     = [];
 let auditLog    = [];
 let tsCount     = 57;
@@ -933,11 +943,19 @@ unsubscribeSync = db.collection("appData").doc("mainStore").onSnapshot(
       console.warn("Snapshot from cache — ignoring to prevent stale data.");
       return;
     }
-  if (doc.exists) {
+if (doc.exists) {
     const data = doc.data();
     userMeta   = data.users      || { ...DEFAULT_USERS };
     passwords  = data.passwords  || { ...DEFAULT_PASSWORDS };
     records    = data.records    || [];
+    
+    // NORMALIZATION: Ensure old records have the required objects to prevent UI crashes
+    records.forEach(r => {
+      if(!r.applicable) r.applicable = {};
+      if(!r.checks) r.checks = {};
+      if(!r.customTexts) r.customTexts = [];
+    });
+    
     auditLog   = data.audit      || [];
     lastKnownTimestamp = data._lastUpdated || null;
     dbReady    = true;                              
@@ -955,10 +973,18 @@ setTimeout(() => {
   db.collection("appData").doc("mainStore").get({ source: 'server' }).then(doc => {
     if (doc.exists) {
       // Data exists — just load it, don't seed
-      const data = doc.data();
+const data = doc.data();
       userMeta   = data.users     || { ...DEFAULT_USERS };
       passwords  = data.passwords || { ...DEFAULT_PASSWORDS };
       records    = Array.isArray(data.records) ? data.records : [];
+      
+      // NORMALIZATION FOR SEEDING
+      records.forEach(r => {
+        if(!r.applicable) r.applicable = {};
+        if(!r.checks) r.checks = {};
+        if(!r.customTexts) r.customTexts = [];
+      });
+      
       auditLog   = Array.isArray(data.audit) ? [...data.audit].sort((a,b) => new Date(b.time) - new Date(a.time)) : [];
       lastKnownTimestamp = data._lastUpdated || null;
       dbReady    = true;
@@ -1240,26 +1266,26 @@ function showPanel(id){
 //  HELPERS
 // ════════════════════════════════════════════════
 function calcProgress(rec){
-  // STRICT FILTER: Math only looks at core cars (DA, DB, TA)
-  const applicable = ['DA','DB','TA'].filter(k=>rec.applicable && rec.applicable[k]);
+  const applicable = ['DA','DB','TA'].filter(k => rec.applicable && rec.applicable[k]);
   if(!applicable.length || !rec.trainSets) return {pct:0,done:0,total:0};
   let done=0;
   const total = rec.trainSets * applicable.length;
+  const checks = rec.checks || {}; // SAFEGUARD
   for(let ts=0;ts<rec.trainSets;ts++){
     for(const c of applicable){
-      if(rec.checks[ts]&&rec.checks[ts][c]) done++;
+      if(checks[ts] && checks[ts][c]) done++;
     }
   }
   return { pct: total ? Math.round(done/total*100):0, done, total };
 }
 
 function tsStatus(rec, tsIdx){
-  // STRICT FILTER: Status only looks at core cars (DA, DB, TA)
-  const applicable = ['DA','DB','TA'].filter(k=>rec.applicable && rec.applicable[k]);
+  const applicable = ['DA','DB','TA'].filter(k => rec.applicable && rec.applicable[k]);
   if(!applicable.length) return 'pending';
-  const done = applicable.filter(c=>rec.checks[tsIdx]&&rec.checks[tsIdx][c]).length;
+  const checks = rec.checks || {}; // SAFEGUARD
+  const done = applicable.filter(c => checks[tsIdx] && checks[tsIdx][c]).length;
   if(done===applicable.length) return 'done';
-  if(done>0 || (rec.checks[tsIdx] && rec.checks[tsIdx]['partial'])) return 'partial';
+  if(done>0 || (checks[tsIdx] && checks[tsIdx]['partial'])) return 'partial';
   return 'pending';
 }
 
@@ -1667,7 +1693,7 @@ function renderDashboard(){
         return `<span class="ts-chip ${s}">TS${i+1}</span>`;
       }).join('');
       
-      const appTags = ['DA','DB','TA'].map(k => `<span class="app-tag ${r.applicable[k] ? 'active' : ''}">${k}</span>`).join('');
+      const appTags = ['DA','DB','TA'].map(k => `<span class="app-tag ${r.applicable && r.applicable[k] ? 'active' : ''}">${k}</span>`).join('');
       const fc = pct === 100 ? 'success' : pct > 0 ? 'warn' : '';
       
       // Card template
@@ -1801,7 +1827,7 @@ function renderRecordsTable(){
   tbody.innerHTML = records.map((r,ri)=>{
     const {pct}=calcProgress(r);
     const cl=pct===100?'pct-high':pct>0?'pct-mid':'pct-low';
-    const app=['DA','DB','TA'].filter(k=>r.applicable[k]).join(' · ');
+    const app=['DA','DB','TA'].filter(k => r.applicable && r.applicable[k]).join(' · ');
     
     // Calculate done and partial counts
     let tsDoneCount = 0;
@@ -2365,6 +2391,7 @@ function updateFilterButtons() {
 // ════════════════════════════════════════════════
 function liveUpdateTsChip(ri, ti) {
   const rec = records[ri];
+  if (!rec || !rec.applicable) return;
   const applicable = ['DA','DB','TA'].filter(k => rec.applicable[k]);
   const checkedCount = applicable.filter(c => {
     const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
@@ -2384,14 +2411,16 @@ function liveUpdateTsChip(ri, ti) {
     chip.textContent = status.charAt(0).toUpperCase() + status.slice(1);
   }
 }
- 
+  
 // ════════════════════════════════════════════════
 //  ✅ FIX 7: AUTO-FILL DATE ON CHECKBOX TICK
 // ════════════════════════════════════════════════
 function autoFillDate(ri, ti) {
   const dateEl = document.getElementById(`date-${ri}-${ti}`);
   if (!dateEl || dateEl.value) return; // don't overwrite existing date
-  const applicable = ['DA','DB','TA'].filter(k => records[ri].applicable[k]);
+  const rec = records[ri];
+  if (!rec || !rec.applicable) return;
+  const applicable = ['DA','DB','TA'].filter(k => rec.applicable[k]);
   const anyChecked = applicable.some(c => {
     const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
     return cb && cb.checked;
