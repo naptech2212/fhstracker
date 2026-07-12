@@ -2172,6 +2172,7 @@ function exportToCSV() {
     // Add a blank row to visually separate each record
     csv += ',,,,,, \n';
   });
+
   // 4. Trigger the download
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -2321,7 +2322,7 @@ function printReport() {
   const container = document.getElementById('print-report');
   
   // 2. Loop through the targetRecords instead of all records
-    container.innerHTML = targetRecords.map(r => {
+  container.innerHTML = targetRecords.map(r => {
     const { pct } = calcProgress(r);
     const applicable = ['DA','DB','TA'].filter(k => r.applicable[k]);
     const headerCols = applicable.map(c => `<th>${c}</th>`).join('');
@@ -2352,20 +2353,6 @@ function printReport() {
       <div style="font-size:.82rem;margin-bottom:.75rem;">Progress: <strong>${pct}%</strong> &nbsp;|&nbsp; Train Sets: <strong>${r.trainSets}</strong> &nbsp;|&nbsp; Applicable: <strong>${applicable.join(', ')}</strong>${completedLine}</div>
       <table class="print-table">
         <thead><tr><th>TS#</th><th>Status</th>${headerCols}<th>Date</th><th>Emp ID</th>${customHeaderCols}<th>Remarks</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <div style="margin-top:1.5rem;font-size:.75rem;color:#999;">Generated: ${new Date().toLocaleString()}</div>
-    </div>`;
-  }).join('');
-    
-    const completedLine = r.completedAt ? ` &nbsp;|&nbsp; <strong>Completed:</strong> ${new Date(r.completedAt).toLocaleString()}` : '';
-    
-    return `<div class="print-page">
-      <div class="print-title">${r.type} — ${r.ref}</div>
-      <div class="print-sub">${r.desc}${r.remark ? ` | Remark: ${r.remark}` : ''}</div>
-      <div style="font-size:.82rem;margin-bottom:.75rem;">Progress: <strong>${pct}%</strong> &nbsp;|&nbsp; Train Sets: <strong>${r.trainSets}</strong> &nbsp;|&nbsp; Applicable: <strong>${applicable.join(', ')}</strong>${completedLine}</div>
-      <table class="print-table">
-        <thead><tr><th>TS#</th><th>Status</th>${headerCols}<th>Date</th><th>Emp ID</th><th>Remarks</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <div style="margin-top:1.5rem;font-size:.75rem;color:#999;">Generated: ${new Date().toLocaleString()}</div>
