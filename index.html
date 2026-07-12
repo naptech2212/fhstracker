@@ -2126,14 +2126,16 @@ function exportToCSV() {
     return;
   }
 
-  // 1. Updated Headers to include the Status column
-  let csv = 'Record Reference,TS#,Status,Date,Done By,Remarks\n';
+  // 1. Updated Headers to include the Status and Custom Fields columns
+  let csv = 'Record Reference,TS#,Status,Date,Done By,Custom Fields,Remarks\n';
 
   // 2. Helper to escape commas and quotes in CSV fields
   const escapeCSV = (str) => `"${String(str || '').replace(/"/g, '""')}"`;
 
   // 3. Process each record and its train sets
   records.forEach(r => {
+    const customTexts = r.customTexts || [];
+
     // Loop through each train set within the record
     for (let i = 0; i < r.trainSets; i++) {
       const checkData = r.checks[i] || {};
@@ -2146,13 +2148,21 @@ function exportToCSV() {
       const doneBy = checkData.empId || ''; 
       const remarks = checkData.remark || '';
 
-      // Build the row with the new Status column
+      // Combine custom field label/value pairs into one readable column
+      // (custom field names can differ per record, so a single flat CSV can't give each its own column)
+      const customFields = customTexts
+        .map((ct, idx) => checkData[`ct_${idx}`] ? `${ct}: ${checkData[`ct_${idx}`]}` : '')
+        .filter(Boolean)
+        .join(' | ');
+
+      // Build the row with the new Status and Custom Fields columns
       const row = [
         escapeCSV(r.ref),
         escapeCSV(tsNum),
         escapeCSV(status.charAt(0).toUpperCase() + status.slice(1)), // Capitalize status
         escapeCSV(date),
         escapeCSV(doneBy),
+        escapeCSV(customFields),
         escapeCSV(remarks)
       ];
 
@@ -2160,9 +2170,8 @@ function exportToCSV() {
     }
     
     // Add a blank row to visually separate each record
-    csv += ',,,,, \n';
+    csv += ',,,,,, \n';
   });
-
   // 4. Trigger the download
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -2206,14 +2215,17 @@ function exportToXLSX() {
       counter++;
     }
 
+    const customTexts = r.customTexts || [];
+
     const rows = [];
     rows.push([r.type, r.ref, r.desc, `Progress: ${pct}%`]);
     rows.push([]);
-    rows.push(['Train Set', 'Status', 'DA', 'DB', 'TA', 'Date', 'Emp ID', 'Remarks']);
+    rows.push(['Train Set', 'Status', 'DA', 'DB', 'TA', 'Date', 'Emp ID', ...customTexts, 'Remarks']);
     
     for (let i = 0; i < r.trainSets; i++) {
       const cd = r.checks[i] || {};
       const s = tsStatus(r, i);
+      const customVals = customTexts.map((ct, idx) => cd[`ct_${idx}`] || '');
       rows.push([
         `TS${i+1}`,
         s.charAt(0).toUpperCase() + s.slice(1),
@@ -2222,12 +2234,13 @@ function exportToXLSX() {
         cd.TA ? 'Yes' : '',
         cd.date || '',
         cd.empId || '',
+        ...customVals,
         cd.remark || ''
       ]);
     }
     
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{wch:10},{wch:10},{wch:6},{wch:6},{wch:6},{wch:13},{wch:10},{wch:30}];
+    ws['!cols'] = [{wch:10},{wch:10},{wch:6},{wch:6},{wch:6},{wch:13},{wch:10},...customTexts.map(()=>({wch:18})),{wch:30}];
     
     // Add the uniquely named sheet
     XLSX.utils.book_append_sheet(wb, ws, finalSheetName);
@@ -2308,24 +2321,42 @@ function printReport() {
   const container = document.getElementById('print-report');
   
   // 2. Loop through the targetRecords instead of all records
-  container.innerHTML = targetRecords.map(r => {
+    container.innerHTML = targetRecords.map(r => {
     const { pct } = calcProgress(r);
     const applicable = ['DA','DB','TA'].filter(k => r.applicable[k]);
     const headerCols = applicable.map(c => `<th>${c}</th>`).join('');
+    const customTexts = r.customTexts || [];
+    const customHeaderCols = customTexts.map(ct => `<th>${esc(ct)}</th>`).join('');
     
     const rows = Array.from({ length: r.trainSets }, (_, i) => {
       const cd = r.checks[i] || {};
       const s = tsStatus(r, i);
       const checkCols = applicable.map(c => `<td style="text-align:center">${cd[c] ? '✓' : '—'}</td>`).join('');
+      const customCols = customTexts.map((ct, idx) => `<td>${esc(cd[`ct_${idx}`]) || '—'}</td>`).join('');
       return `<tr>
         <td>TS${i+1}</td>
         <td class="s-${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</td>
         ${checkCols}
         <td>${cd.date||'—'}</td>
         <td>${cd.empId||'—'}</td>
+        ${customCols}
         <td>${cd.remark||''}</td>
       </tr>`;
     }).join('');
+    
+    const completedLine = r.completedAt ? ` &nbsp;|&nbsp; <strong>Completed:</strong> ${new Date(r.completedAt).toLocaleString()}` : '';
+    
+    return `<div class="print-page">
+      <div class="print-title">${r.type} — ${r.ref}</div>
+      <div class="print-sub">${r.desc}${r.remark ? ` | Remark: ${r.remark}` : ''}</div>
+      <div style="font-size:.82rem;margin-bottom:.75rem;">Progress: <strong>${pct}%</strong> &nbsp;|&nbsp; Train Sets: <strong>${r.trainSets}</strong> &nbsp;|&nbsp; Applicable: <strong>${applicable.join(', ')}</strong>${completedLine}</div>
+      <table class="print-table">
+        <thead><tr><th>TS#</th><th>Status</th>${headerCols}<th>Date</th><th>Emp ID</th>${customHeaderCols}<th>Remarks</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="margin-top:1.5rem;font-size:.75rem;color:#999;">Generated: ${new Date().toLocaleString()}</div>
+    </div>`;
+  }).join('');
     
     const completedLine = r.completedAt ? ` &nbsp;|&nbsp; <strong>Completed:</strong> ${new Date(r.completedAt).toLocaleString()}` : '';
     
