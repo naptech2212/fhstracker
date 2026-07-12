@@ -255,7 +255,8 @@
     padding:.5rem .75rem;background:var(--bg-input);border-radius:var(--radius);
     margin-bottom:.4rem;border:1px solid var(--border)}
   .ts-check-label{font-size:.85rem;font-family:var(--mono);color:var(--text-pri)}
-  .ts-checks{display:flex;gap:1rem}
+  .ts-row-top{display:flex;justify-content:space-between;align-items:center;width:100%;flex-wrap:wrap;gap:.5rem}
+  .ts-checks{display:flex;gap:.6rem;flex-wrap:wrap;row-gap:.4rem}
   .check-item{display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.82rem}
   .check-item input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer}
   .check-item label{color:var(--text-sec);cursor:pointer;font-family:var(--mono);font-weight:600;font-size:.75rem}
@@ -396,6 +397,13 @@
       margin-top: 0.25rem;
     }
     .check-record-header > div:last-child { width: 100%; justify-content: space-between; }
+    
+    /* Checklist row (Status panel) — stack label above checkboxes, shrink checkboxes to fit */
+    .ts-check-label { flex: 1 1 100%; }
+    .ts-checks { flex-basis: 100%; gap: .5rem; }
+    .check-item { font-size: .74rem; gap: .3rem; }
+    .check-item input[type=checkbox] { width: 14px; height: 14px; }
+    .check-item label { font-size: .7rem; }
     
     .bottom-nav {
       display: flex;
@@ -2493,7 +2501,7 @@ function autoFillDate(ri, ti) {
       }).join('');
 
       return `<div class="ts-check-row" style="flex-wrap:wrap;gap:.5rem">
-        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+        <div class="ts-row-top">
           <span class="ts-check-label">Train Set ${ti+1} <span class="ts-chip ${s}" style="margin-left:.5rem">TS${ti+1}</span>
             <span class="ts-live-chip ${s}" id="live-chip-${ri}-${ti}">${s.charAt(0).toUpperCase()+s.slice(1)}</span>
           </span>
