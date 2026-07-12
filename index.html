@@ -2501,6 +2501,88 @@ function autoFillDate(ri, ti) {
     return `<div class="trainset-section">${lockBanner}<div class="ts-header">Train Sets — Check applicable cars</div>${tsRows}${saveAllBtn}</div>`;
   }
   
+// ════════════════════════════════════════════════
+//  CHECKS PANEL — record accordion (lazy-rendered TS bodies)
+// ════════════════════════════════════════════════
+let checksExpanded = new Set();
+
+function toggleCheckCard(ri) {
+  if (checksExpanded.has(ri)) checksExpanded.delete(ri);
+  else checksExpanded.add(ri);
+  renderChecks();
+}
+
+function renderChecks(){
+  const list = document.getElementById('checks-list');
+  if (!list) return;
+
+  if (!records.length) {
+    list.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>No records available. Ask Super Admin to create records first.</p></div>`;
+    return;
+  }
+
+  const searchInput = document.getElementById('checks-search');
+  const searchVal = searchInput ? searchInput.value.toLowerCase() : '';
+
+  const filtered = records
+    .map((r, ri) => ({ r, ri }))
+    .filter(({ r }) => {
+      if (checksFilter.type && r.type !== checksFilter.type) return false;
+      if (searchVal && !r.ref.toLowerCase().includes(searchVal) && !r.desc.toLowerCase().includes(searchVal)) return false;
+      if (checksFilter.status) {
+        const { pct } = calcProgress(r);
+        if (checksFilter.status === 'done'    && pct !== 100) return false;
+        if (checksFilter.status === 'partial' && !(pct > 0 && pct < 100)) return false;
+        if (checksFilter.status === 'pending' && pct !== 0) return false;
+      }
+      return true;
+    });
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>No records match the current filter.</p></div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(({ r, ri }) => {
+    const { pct } = calcProgress(r);
+    const fc = pct === 100 ? 'success' : pct > 0 ? 'warn' : '';
+
+    let tsDoneCount = 0, tsPartialCount = 0;
+    for (let i = 0; i < r.trainSets; i++) {
+      const s = tsStatus(r, i);
+      if (s === 'done') tsDoneCount++;
+      if (s === 'partial') tsPartialCount++;
+    }
+
+    const isExpanded = checksExpanded.has(ri);
+    const locked = !canEditRecord(r);
+    const lockBadge = (r.assignedTo && locked) ? ` <span title="Assigned to ${esc(r.assignedTo)}">🔒</span>` : '';
+
+    // ✅ PERF: only build the (expensive) TS checklist rows when the card is actually expanded
+    const body = isExpanded ? buildTsBodyHtml(ri) : '';
+
+    return `<div class="record-card">
+      <div class="record-header">
+        <div class="record-meta">
+          <div><span class="record-type ${r.type.toLowerCase()}">${r.type}</span>${lockBadge}</div>
+          <div class="record-ref">${esc(r.ref)}</div>
+          <div class="record-desc">${esc(r.desc)}</div>
+        </div>
+        <div class="record-pct" id="pct-text-${ri}">${pct}%</div>
+      </div>
+      <div class="progress-bar-wrap">
+        <div style="display:flex;justify-content:space-between;font-size:.72rem;font-family:var(--mono);margin-bottom:.4rem;">
+          <span id="done-cnt-${ri}" style="color:var(--success);font-weight:700;">${tsDoneCount} Done</span>
+          <span id="part-cnt-${ri}" style="color:var(--warn);font-weight:700;">${tsPartialCount} Partial</span>
+        </div>
+        <div class="progress-bar-track"><div class="progress-bar-fill ${fc}" id="pct-bar-${ri}" style="width:${pct}%"></div></div>
+      </div>
+      <button class="chips-toggle" onclick="toggleCheckCard(${ri})">${isExpanded ? '▲ Hide checklist' : '▼ Show checklist'}</button>
+      ${isExpanded ? `<div>${body}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
 function saveSingleTsCheck(ri, ti, btn) {
   if (!canEditRecord(records[ri])) {
     showToast('This record is assigned to another user — you cannot edit it', 'err'); return;
