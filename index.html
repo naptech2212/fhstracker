@@ -609,13 +609,30 @@
             <button onclick="adjustTS(1)">＋</button>
             <span style="font-size:.82rem;color:var(--text-dim);margin-left:.3rem">train sets</span>
           </div>
-          <div class="form-section">Applicable Checks</div>
-          <div style="font-size:.82rem;color:var(--text-sec);margin-bottom:.6rem">Select which car checks are applicable for this record</div>
-          <div class="checkbox-group">
-            <label class="checkbox-label"><input type="checkbox" id="f-da"> DA — Driving Car A</label>
-            <label class="checkbox-label"><input type="checkbox" id="f-db"> DB — Driving Car B</label>
-            <label class="checkbox-label"><input type="checkbox" id="f-ta"> TA — Trailer Car A</label>
+          
+          <div class="form-section">Applicable Checks & Fields</div>
+          
+          <div class="field" style="margin-bottom:.25rem">
+            <label>Standard Cars</label>
+            <div class="checkbox-group" style="margin-top:.3rem; margin-bottom: 1rem;">
+              <label class="checkbox-label"><input type="checkbox" id="f-da"> DA — Driving Car A</label>
+              <label class="checkbox-label"><input type="checkbox" id="f-db"> DB — Driving Car B</label>
+              <label class="checkbox-label"><input type="checkbox" id="f-ta"> TA — Trailer Car A</label>
+            </div>
+            
+            <label>Custom Checkboxes</label>
+            <div style="font-size:.75rem;color:var(--text-sec);margin-bottom:.4rem;">Add extra boolean checks (e.g. TC - Trailer Car C) - *Does not affect progress %*</div>
+            <div id="create-custom-checks" style="display:flex; flex-direction:column; gap:0.4rem;"></div>
+            <button onclick="addDynamicField('create-custom-checks', 'Checkbox Name (e.g. TC)')" class="cf-btn" style="margin-top:0.5rem; font-size:0.75rem;">+ Add Custom Checkbox</button>
           </div>
+
+          <div class="field" style="margin-top: 1.5rem;">
+            <label>Custom Text Fields</label>
+            <div style="font-size:.75rem;color:var(--text-sec);margin-bottom:.4rem;">Add extra text inputs (e.g. Serial Number) per Train Set</div>
+            <div id="create-custom-texts" style="display:flex; flex-direction:column; gap:0.4rem;"></div>
+            <button onclick="addDynamicField('create-custom-texts', 'Text Field Name (e.g. Serial No)')" class="cf-btn" style="margin-top:0.5rem; font-size:0.75rem;">+ Add Text Field</button>
+          </div>
+          
           <div class="form-actions">
             <button class="btn-cancel" onclick="showPanel('dashboard')">Cancel</button>
             <button class="btn-save" onclick="saveRecord()">Save Record</button>
@@ -820,12 +837,22 @@
       </div>
     </div>
     <div class="field" style="margin-bottom:.25rem">
-      <label>Applicable Checks</label>
-      <div class="checkbox-group" style="margin-top:.3rem">
+      <label>Standard Cars</label>
+      <div class="checkbox-group" style="margin-top:.3rem; margin-bottom: 1rem;">
         <label class="checkbox-label"><input type="checkbox" id="e-da"> DA — Driving Car A</label>
         <label class="checkbox-label"><input type="checkbox" id="e-db"> DB — Driving Car B</label>
         <label class="checkbox-label"><input type="checkbox" id="e-ta"> TA — Trailer Car A</label>
       </div>
+      
+      <label>Custom Checkboxes</label>
+      <div id="edit-custom-checks" style="display:flex; flex-direction:column; gap:0.4rem; margin-top:0.4rem;"></div>
+      <button onclick="addDynamicField('edit-custom-checks', 'Checkbox Name (e.g. TC)')" class="cf-btn" style="margin-top:0.5rem; font-size:0.75rem;">+ Add Custom Checkbox</button>
+    </div>
+
+    <div class="field" style="margin-top: 1.5rem;">
+      <label>Custom Text Fields</label>
+      <div id="edit-custom-texts" style="display:flex; flex-direction:column; gap:0.4rem; margin-top:0.4rem;"></div>
+      <button onclick="addDynamicField('edit-custom-texts', 'Text Field Name')" class="cf-btn" style="margin-top:0.5rem; font-size:0.75rem;">+ Add Text Field</button>
     </div>
     <div class="field">
       <label>Remarks</label>
@@ -1213,7 +1240,8 @@ function showPanel(id){
 //  HELPERS
 // ════════════════════════════════════════════════
 function calcProgress(rec){
-  const applicable = ['DA','DB','TA'].filter(k=>rec.applicable[k]);
+  // STRICT FILTER: Math only looks at core cars (DA, DB, TA)
+  const applicable = ['DA','DB','TA'].filter(k=>rec.applicable && rec.applicable[k]);
   if(!applicable.length || !rec.trainSets) return {pct:0,done:0,total:0};
   let done=0;
   const total = rec.trainSets * applicable.length;
@@ -1226,7 +1254,8 @@ function calcProgress(rec){
 }
 
 function tsStatus(rec, tsIdx){
-  const applicable = ['DA','DB','TA'].filter(k=>rec.applicable[k]);
+  // STRICT FILTER: Status only looks at core cars (DA, DB, TA)
+  const applicable = ['DA','DB','TA'].filter(k=>rec.applicable && rec.applicable[k]);
   if(!applicable.length) return 'pending';
   const done = applicable.filter(c=>rec.checks[tsIdx]&&rec.checks[tsIdx][c]).length;
   if(done===applicable.length) return 'done';
@@ -1234,6 +1263,17 @@ function tsStatus(rec, tsIdx){
   return 'pending';
 }
 
+function addDynamicField(containerId, placeholder, val = '') {
+  const id = 'df_' + Math.random().toString(36).substr(2, 9);
+  const html = `
+    <div id="${id}" style="display:flex; gap:0.5rem; align-items:center;">
+      <input type="text" class="dyn-input-${containerId}" value="${esc(val)}" placeholder="${placeholder}" style="flex:1; padding:.35rem .6rem; background:var(--bg-deep); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-pri); font-family:var(--sans); font-size:.8rem; outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      <button onclick="document.getElementById('${id}').remove()" style="background:transparent; border:none; color:var(--danger); cursor:pointer; font-size:1.1rem; padding:0 0.2rem;">✕</button>
+    </div>
+  `;
+  document.getElementById(containerId).insertAdjacentHTML('beforeend', html);
+}
+  
 function fmtTime(iso){ const d=new Date(iso); return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
 
 // ════════════════════════════════════════════════
@@ -1334,22 +1374,35 @@ function saveRecord(){
   const db   = document.getElementById('f-db').checked;
   const ta   = document.getElementById('f-ta').checked;
   if(!type||!ref||!desc){ showToast('Please fill all required fields','err'); return; }
-  if(!da&&!db&&!ta){ showToast('Select at least one applicable check','err'); return; }
+  
+  // Capture custom fields
+  const applicable = { DA:da, DB:db, TA:ta };
+  document.querySelectorAll('.dyn-input-create-custom-checks').forEach(inp => {
+    const val = inp.value.trim();
+    if(val) applicable[val] = true;
+  });
+  const customTexts = [];
+  document.querySelectorAll('.dyn-input-create-custom-texts').forEach(inp => {
+    const val = inp.value.trim();
+    if(val) customTexts.push(val);
+  });
+
+  if(!applicable.DA && !applicable.DB && !applicable.TA){ showToast('Select at least one standard applicable check','err'); return; }
+  
   const rec = {
     id: Date.now().toString(), type, ref, desc, trainSets: tsCount,
-    applicable:{DA:da,DB:db,TA:ta}, checks:{}, remark:'', assignedTo:'',
+    applicable: applicable, customTexts: customTexts, checks:{}, remark:'', assignedTo:'',
     createdBy: currentUser.name, createdAt: new Date().toISOString()
   };
   records.push(rec);
   addAudit(`Created record: ${ref} (${type})`);
   save();
   showToast('Record saved successfully');
-  document.getElementById('f-type').value='';
-  document.getElementById('f-ref').value='';
-  document.getElementById('f-desc').value='';
-  document.getElementById('f-da').checked=false;
-  document.getElementById('f-db').checked=false;
-  document.getElementById('f-ta').checked=false;
+  
+  // Reset Form
+  document.getElementById('f-type').value=''; document.getElementById('f-ref').value=''; document.getElementById('f-desc').value='';
+  document.getElementById('f-da').checked=false; document.getElementById('f-db').checked=false; document.getElementById('f-ta').checked=false;
+  document.getElementById('create-custom-checks').innerHTML=''; document.getElementById('create-custom-texts').innerHTML='';
   tsCount=4; document.getElementById('ts-count').textContent=4;
   showPanel('dashboard');
 }
@@ -1365,10 +1418,20 @@ function openEditModal(ri){
   document.getElementById('e-ref').value   = r.ref;
   document.getElementById('e-desc').value  = r.desc;
   document.getElementById('e-ts-count').textContent = editTsCount;
-  document.getElementById('e-da').checked  = !!r.applicable.DA;
-  document.getElementById('e-db').checked  = !!r.applicable.DB;
-  document.getElementById('e-ta').checked  = !!r.applicable.TA;
+  document.getElementById('e-da').checked  = !!r.applicable?.DA;
+  document.getElementById('e-db').checked  = !!r.applicable?.DB;
+  document.getElementById('e-ta').checked  = !!r.applicable?.TA;
   document.getElementById('e-remark').value= r.remark||'';
+  
+  document.getElementById('edit-custom-checks').innerHTML = '';
+  document.getElementById('edit-custom-texts').innerHTML = '';
+  Object.keys(r.applicable || {}).forEach(k => {
+    if (k !== 'DA' && k !== 'DB' && k !== 'TA' && r.applicable[k]) addDynamicField('edit-custom-checks', 'Checkbox Name', k);
+  });
+  if (r.customTexts) {
+    r.customTexts.forEach(ct => addDynamicField('edit-custom-texts', 'Text Field Name', ct));
+  }
+  
   document.getElementById('edit-modal').classList.add('open');
 }
 
@@ -1392,22 +1455,37 @@ function saveEditRecord(){
   const ta     = document.getElementById('e-ta').checked;
   const remark = document.getElementById('e-remark').value.trim();
   if(!type||!ref||!desc){ showToast('Please fill all required fields','err'); return; }
-  if(!da&&!db&&!ta){ showToast('Select at least one applicable check','err'); return; }
+  
+  const applicable = { DA:da, DB:db, TA:ta };
+  document.querySelectorAll('.dyn-input-edit-custom-checks').forEach(inp => {
+    const val = inp.value.trim();
+    if(val) applicable[val] = true;
+  });
+  const customTexts = [];
+  document.querySelectorAll('.dyn-input-edit-custom-texts').forEach(inp => {
+    const val = inp.value.trim();
+    if(val) customTexts.push(val);
+  });
+
+  if(!applicable.DA && !applicable.DB && !applicable.TA){ showToast('Select at least one standard applicable check','err'); return; }
+  
   const rec = records[editIndex];
   const oldRef = rec.ref;
   rec.type = type; rec.ref = ref; rec.desc = desc;
   rec.trainSets = editTsCount;
-  rec.applicable = {DA:da, DB:db, TA:ta};
+  rec.applicable = applicable;
+  rec.customTexts = customTexts;
   rec.remark = remark;
   rec.lastEditedBy = currentUser.name;
   rec.lastEditedAt = new Date().toISOString();
+  
   addAudit(`Edited record: ${oldRef} → ${ref} (${type})`);
   save();
   closeEditModal();
   showToast('Record updated');
   renderRecordsTable();
 }
-
+  
 function deleteRecord(ri){
   const rec = records[ri];
   if(!confirm(`Delete record "${rec.ref}"? This cannot be undone.`)) return;
@@ -2332,12 +2410,13 @@ function autoFillDate(ri, ti) {
     const locked = !canEditRecord(r);
     const isReadOnly = isViewer || locked;
     const disabledAttr = isReadOnly ? 'disabled' : '';
-    const applicable = ['DA','DB','TA'].filter(k=>r.applicable[k]);
+    const applicable = Object.keys(r.applicable || {}).filter(k=>r.applicable[k]);
+    const customTexts = r.customTexts || [];
+    
     const lockBanner = (locked && !isViewer)
       ? `<div style="margin-bottom:.75rem;padding:.5rem .8rem;background:#F59E0B15;border:1px solid #F59E0B40;border-radius:var(--radius);color:var(--warn);font-size:.8rem;">
            🔒 This record is assigned to <b>${esc(r.assignedTo)}</b> — only that user (or Super Admin) can edit it.
-         </div>`
-      : '';
+         </div>` : '';
 
     const tsRows = Array.from({length:r.trainSets},(_,ti)=>{
       const checks=applicable.map(c=>{
@@ -2359,6 +2438,11 @@ function autoFillDate(ri, ti) {
       const existingEmp=(r.checks[ti]&&r.checks[ti]['empId'])?r.checks[ti]['empId']:'';
       const existingDate=(r.checks[ti]&&r.checks[ti]['date'])?r.checks[ti]['date']:'';
 
+      const customTextHtml = customTexts.map((ct, idx) => {
+        const existingVal = (r.checks[ti] && r.checks[ti][`ct_${idx}`]) ? r.checks[ti][`ct_${idx}`] : '';
+        return `<input type="text" id="ct-${ri}-${ti}-${idx}" value="${esc(existingVal)}" placeholder="${esc(ct)}" ${disabledAttr} oninput="isDirty=true;" style="flex:1;min-width:120px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isReadOnly ? 'opacity:0.6; cursor:not-allowed;' : ''}" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">`;
+      }).join('');
+
       return `<div class="ts-check-row" style="flex-wrap:wrap;gap:.5rem">
         <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
           <span class="ts-check-label">Train Set ${ti+1} <span class="ts-chip ${s}" style="margin-left:.5rem">TS${ti+1}</span>
@@ -2369,147 +2453,36 @@ function autoFillDate(ri, ti) {
         <div style="display:flex;align-items:center;gap:.5rem;width:100%;margin-top:.35rem;flex-wrap:wrap;">
 
           <input type="text" id="emp-${ri}-${ti}" value="${esc(existingEmp)}" placeholder="Emp ID" ${disabledAttr}
-          oninput="isDirty=true;"
-            style="width:90px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isReadOnly ? 'opacity:0.6; cursor:not-allowed;' : ''}"
-            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          oninput="isDirty=true;" style="width:90px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isReadOnly ? 'opacity:0.6; cursor:not-allowed;' : ''}" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
 
           <input type="date" id="date-${ri}-${ti}" value="${esc(existingDate)}" ${disabledAttr}
-          oninput="isDirty=true;"
-            style="width:125px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;color-scheme:dark; ${isReadOnly ? 'opacity:0.6; cursor:not-allowed;' : ''}"
-            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          oninput="isDirty=true;" style="width:125px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none;color-scheme:dark; ${isReadOnly ? 'opacity:0.6; cursor:not-allowed;' : ''}" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
 
           <input type="text" id="rmk-${ri}-${ti}" value="${esc(existingRemark)}" placeholder="Remarks…" ${disabledAttr}
-          oninput="isDirty=true;"
-            style="flex:1;min-width:150px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isReadOnly ? 'opacity:0.6; cursor:not-allowed;' : ''}"
-            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          oninput="isDirty=true;" style="flex:1;min-width:150px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isReadOnly ? 'opacity:0.6; cursor:not-allowed;' : ''}" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
 
+          ${customTextHtml}
           ${isReadOnly ? '' : `<button onclick="saveSingleTsCheck(${ri}, ${ti}, this)" class="btn-save" style="padding:.35rem .85rem; font-size:.75rem; border-radius:var(--radius);">Save</button>`}
         </div>
       </div>`;
     }).join('');
 
-    const saveAllBtn = isReadOnly ? '' : `
-      <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
-        <button onclick="saveRecordChecks(${ri}, this)" class="btn-save" style="padding: .6rem 1.5rem; white-space: nowrap;">Save Complete Record</button>
-      </div>
-    `;
+    const saveAllBtn = isReadOnly ? '' : `<div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;"><button onclick="saveRecordChecks(${ri}, this)" class="btn-save" style="padding: .6rem 1.5rem; white-space: nowrap;">Save Complete Record</button></div>`;
 
-    return `<div class="trainset-section">
-          ${lockBanner}
-          <div class="ts-header">Train Sets — Check applicable cars</div>
-          ${tsRows}
-          ${saveAllBtn}
-        </div>`;
+    return `<div class="trainset-section">${lockBanner}<div class="ts-header">Train Sets — Check applicable cars</div>${tsRows}${saveAllBtn}</div>`;
   }
   
-function renderChecks(){
-  const container = document.getElementById('checks-list');
-  const openAccordions = Array.from(document.querySelectorAll('.check-record-body.open')).map(el => el.id);
-
-  if(!records.length){ container.innerHTML=`<div class="empty-state"><div class="icon">📋</div><p>No records available. Ask Super Admin to create records first.</p></div>`; return; }
-
-  // Apply search + type + status filters
-  const searchVal = (document.getElementById('checks-search')?.value || '').toLowerCase();
-  const filteredRecords = records.map((r, ri) => ({ r, ri })).filter(({ r }) => {
-    if (checksFilter.type && r.type !== checksFilter.type) return false;
-    if (searchVal && !r.ref.toLowerCase().includes(searchVal) && !r.desc.toLowerCase().includes(searchVal)) return false;
-    if (checksFilter.status) {
-      const { pct } = calcProgress(r);
-      if (checksFilter.status === 'done'    && pct !== 100) return false;
-      if (checksFilter.status === 'partial' && !(pct > 0 && pct < 100)) return false;
-      if (checksFilter.status === 'pending' && pct !== 0) return false;
-    }
-    return true;
-  });
- 
-  if (!filteredRecords.length) {
-    container.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>No records match the current filter.</p></div>`;
-    return;
-  }
- 
-  // Only build the cheap header for every record. Heavy
-  // per-train-set rows are only built for already-expanded records.
-  container.innerHTML = filteredRecords.map(({ r, ri }) => {
-    const {pct}=calcProgress(r);
-    const fc=pct===100?'success':pct>0?'warn':'';
-
-    let tsDoneCount = 0;
-    let tsPartialCount = 0;
-    for (let i = 0; i < r.trainSets; i++) {
-      const s = tsStatus(r, i);
-      if (s === 'done') tsDoneCount++;
-      if (s === 'partial') tsPartialCount++;
-    }
-
-    const isOpen = openAccordions.includes('acc-'+ri);
-    const bodyHtml = isOpen ? buildTsBodyHtml(ri) : '';
-
-    // PROPER ACCORDION WRAPPER RESTORED HERE
-    return `<div class="check-record">
-      <div class="check-record-header" onclick="toggleAccordion(${ri})">
-        <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
-          <span class="record-type ${r.type.toLowerCase()}">${r.type}</span>
-          <div style="display:flex;flex-direction:column">
-            <span style="font-family:var(--mono);font-size:.8rem;color:var(--text-sec);line-height:1.2">${esc(r.ref)}</span>
-            <span style="font-size:.95rem;font-weight:600;color:var(--text-pri)">${esc(r.desc)}</span>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:1.5rem">
-          <div style="display:flex;gap:1rem;font-family:var(--mono);font-size:.75rem">
-            <span style="color:var(--success);font-weight:700" id="done-cnt-${ri}">${tsDoneCount} Done</span>
-            <span style="color:var(--warn);font-weight:700" id="part-cnt-${ri}">${tsPartialCount} Partial</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:.75rem">
-            <span style="font-size:.85rem;font-family:var(--mono);font-weight:700;color:var(--text-pri)" id="pct-text-${ri}">${pct}%</span>
-            <div style="width:80px;height:6px;background:var(--bg-deep);border-radius:3px;overflow:hidden">
-              <div id="pct-bar-${ri}" class="progress-bar-fill ${fc}" style="width:${pct}%"></div>
-            </div>
-            <span class="chevron" id="chevron-${ri}">▼</span>
-          </div>
-        </div>
-      </div>
-      <div class="check-record-body" id="acc-${ri}" data-rendered="${isOpen?'1':'0'}">${bodyHtml}</div>
-    </div>`;
-  }).join('');
-
-  openAccordions.forEach(id => {
-    const body = document.getElementById(id);
-    if (body) body.classList.add('open');
-    const ri = id.replace('acc-', '');
-    const chevron = document.getElementById('chevron-' + ri);
-    if (chevron) chevron.classList.add('open');
-  });
-}
-
-function toggleAccordion(ri){
-  const body = document.getElementById('acc-'+ri);
-  if (body && body.dataset.rendered !== '1') {
-    body.innerHTML = buildTsBodyHtml(ri);
-    body.dataset.rendered = '1';
-  }
-  body.classList.toggle('open');
-  document.getElementById('chevron-'+ri).classList.toggle('open');
-}
-
 function saveSingleTsCheck(ri, ti, btn) {
-  // Guard: block saving if this record is locked to another user
   if (!canEditRecord(records[ri])) {
-    showToast('This record is assigned to another user — you cannot edit it', 'err');
-    return;
+    showToast('This record is assigned to another user — you cannot edit it', 'err'); return;
   }
   
-  // Visual feedback on the specific button clicked
-  if (btn) {
-    btn.textContent = 'Saving...';
-    btn.style.opacity = '0.7';
-    btn.disabled = true;
-  }
+  if (btn) { btn.textContent = 'Saving...'; btn.style.opacity = '0.7'; btn.disabled = true; }
 
   setTimeout(() => {
     const rec = records[ri];
-    const applicable = ['DA','DB','TA'].filter(k=>rec.applicable[k]);
+    const applicable = Object.keys(rec.applicable || {}).filter(k=>rec.applicable[k]);
 
-    // Ensure the object exists before writing to it
     if(!rec.checks[ti]) rec.checks[ti] = {};
 
     const empEl = document.getElementById(`emp-${ri}-${ti}`);
@@ -2525,13 +2498,19 @@ function saveSingleTsCheck(ri, ti, btn) {
       
       const partialCb = document.getElementById(`chk-${ri}-${ti}-partial`);
       if (partialCb) rec.checks[ti]['partial'] = partialCb.checked;
+      
+      if (rec.customTexts) {
+        rec.customTexts.forEach((ct, idx) => {
+          const ctEl = document.getElementById(`ct-${ri}-${ti}-${idx}`);
+          if (ctEl) rec.checks[ti][`ct_${idx}`] = ctEl.value.trim();
+        });
+      }
     }
 
     addAudit(`Updated TS${ti+1} details for ${rec.ref}`);
     save();
     isDirty = false;
 
-    // Dynamically update ONLY the header metrics instead of re-rendering everything
     const {pct} = calcProgress(rec);
     let tsDoneCount = 0;
     let tsPartialCount = 0;
@@ -2558,38 +2537,22 @@ function saveSingleTsCheck(ri, ti, btn) {
       pctBar.className = `progress-bar-fill ${fc}`;
     }
 
-    // Reset button and show confirmation
-    if (btn) {
-      btn.textContent = 'Save';
-      btn.style.opacity = '1';
-      btn.disabled = false;
-    }
+    if (btn) { btn.textContent = 'Save'; btn.style.opacity = '1'; btn.disabled = false; }
     
-    if (pct === 100) {
-      showToast(`${rec.ref} is now 100% complete! ✓`);
-    } else {
-      showToast(`TS${ti+1} saved successfully`);
-    }
+    if (pct === 100) { showToast(`${rec.ref} is now 100% complete! ✓`); } 
+    else { showToast(`TS${ti+1} saved successfully`); }
   }, 10);
 }  
     
 function saveRecordChecks(ri, btn) {
-  // Guard: block saving if this record is locked to another user
   if (!canEditRecord(records[ri])) {
-    showToast('This record is assigned to another user — you cannot edit it', 'err');
-    return;
+    showToast('This record is assigned to another user — you cannot edit it', 'err'); return;
   }
-  // 1. Show immediate visual feedback on the button
-  if (btn) {
-    btn.textContent = 'Saving...';
-    btn.style.opacity = '0.7';
-    btn.disabled = true;
-  }
+  if (btn) { btn.textContent = 'Saving...'; btn.style.opacity = '0.7'; btn.disabled = true; }
 
-  // 2. Wrap heavy logic in setTimeout so the UI doesn't freeze
   setTimeout(() => {
     const rec = records[ri];
-    const applicable = ['DA','DB','TA'].filter(k=>rec.applicable[k]);
+    const applicable = Object.keys(rec.applicable || {}).filter(k=>rec.applicable[k]);
 
     for(let ti=0; ti<rec.trainSets; ti++) {
       if(!rec.checks[ti]) rec.checks[ti] = {};
@@ -2607,6 +2570,13 @@ function saveRecordChecks(ri, btn) {
         
         const partialCb = document.getElementById(`chk-${ri}-${ti}-partial`);
         if (partialCb) rec.checks[ti]['partial'] = partialCb.checked;
+        
+        if (rec.customTexts) {
+          rec.customTexts.forEach((ct, idx) => {
+            const ctEl = document.getElementById(`ct-${ri}-${ti}-${idx}`);
+            if (ctEl) rec.checks[ti][`ct_${idx}`] = ctEl.value.trim();
+          });
+        }
       }
     }
 
@@ -2614,7 +2584,6 @@ function saveRecordChecks(ri, btn) {
     save();
     isDirty = false;
 
-    // 3. Dynamically update ONLY the header metrics instead of re-rendering everything
     const {pct} = calcProgress(rec);
     let tsDoneCount = 0;
     let tsPartialCount = 0;
@@ -2641,21 +2610,13 @@ function saveRecordChecks(ri, btn) {
       pctBar.className = `progress-bar-fill ${fc}`;
     }
 
-    // 4. Toast feedback and reset button
-    if (pct === 100) {
-      showToast(`${rec.ref} — 100% complete! ✓`);
-    } else {
-      showToast(`Complete record for ${rec.ref} saved successfully`);
-    }
+    if (pct === 100) { showToast(`${rec.ref} — 100% complete! ✓`); } 
+    else { showToast(`Complete record for ${rec.ref} saved successfully`); }
 
-    if (btn) {
-      btn.textContent = 'Save Complete Record';
-      btn.style.opacity = '1';
-      btn.disabled = false;
-    }
+    if (btn) { btn.textContent = 'Save Complete Record'; btn.style.opacity = '1'; btn.disabled = false; }
   }, 10);
 }
-
+  
 function setTheme(theme){
   if (theme === 'light') {
     document.documentElement.setAttribute('data-theme', 'light');
