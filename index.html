@@ -1266,7 +1266,7 @@ function showPanel(id){
 //  HELPERS
 // ════════════════════════════════════════════════
 function calcProgress(rec){
-  const applicable = ['DA','DB','TA'].filter(k => rec.applicable && rec.applicable[k]);
+  const applicable = Object.keys(rec.applicable || {}).filter(k => rec.applicable[k]);
   if(!applicable.length || !rec.trainSets) return {pct:0,done:0,total:0};
   let done=0;
   const total = rec.trainSets * applicable.length;
@@ -1280,7 +1280,7 @@ function calcProgress(rec){
 }
 
 function tsStatus(rec, tsIdx){
-  const applicable = ['DA','DB','TA'].filter(k => rec.applicable && rec.applicable[k]);
+  const applicable = Object.keys(rec.applicable || {}).filter(k => rec.applicable[k]);
   if(!applicable.length) return 'pending';
   const checks = rec.checks || {}; // SAFEGUARD
   const done = applicable.filter(c => checks[tsIdx] && checks[tsIdx][c]).length;
@@ -1693,7 +1693,9 @@ function renderDashboard(){
         return `<span class="ts-chip ${s}">TS${i+1}</span>`;
       }).join('');
       
-      const appTags = ['DA','DB','TA'].map(k => `<span class="app-tag ${r.applicable && r.applicable[k] ? 'active' : ''}">${k}</span>`).join('');
+      const customCheckKeys = Object.keys(r.applicable || {}).filter(k => !['DA','DB','TA'].includes(k) && r.applicable[k]);
+      const appTags = ['DA','DB','TA'].map(k => `<span class="app-tag ${r.applicable && r.applicable[k] ? 'active' : ''}">${k}</span>`).join('')
+        + customCheckKeys.map(k => `<span class="app-tag active">${esc(k)}</span>`).join('');
       const fc = pct === 100 ? 'success' : pct > 0 ? 'warn' : '';
       
       // Card template
@@ -1827,7 +1829,7 @@ function renderRecordsTable(){
   tbody.innerHTML = records.map((r,ri)=>{
     const {pct}=calcProgress(r);
     const cl=pct===100?'pct-high':pct>0?'pct-mid':'pct-low';
-    const app=['DA','DB','TA'].filter(k => r.applicable && r.applicable[k]).join(' · ');
+    const app=Object.keys(r.applicable || {}).filter(k => r.applicable[k]).join(' · ');
     
     // Calculate done and partial counts
     let tsDoneCount = 0;
@@ -2217,22 +2219,22 @@ function exportToXLSX() {
     }
 
     const customTexts = r.customTexts || [];
+    const applicable = Object.keys(r.applicable || {}).filter(k => r.applicable[k]);
 
     const rows = [];
     rows.push([r.type, r.ref, r.desc, `Progress: ${pct}%`]);
     rows.push([]);
-    rows.push(['Train Set', 'Status', 'DA', 'DB', 'TA', 'Date', 'Emp ID', ...customTexts, 'Remarks']);
+    rows.push(['Train Set', 'Status', ...applicable, 'Date', 'Emp ID', ...customTexts, 'Remarks']);
     
     for (let i = 0; i < r.trainSets; i++) {
       const cd = r.checks[i] || {};
       const s = tsStatus(r, i);
+      const checkVals = applicable.map(c => cd[c] ? 'Yes' : '');
       const customVals = customTexts.map((ct, idx) => cd[`ct_${idx}`] || '');
       rows.push([
         `TS${i+1}`,
         s.charAt(0).toUpperCase() + s.slice(1),
-        cd.DA ? 'Yes' : '',
-        cd.DB ? 'Yes' : '',
-        cd.TA ? 'Yes' : '',
+        ...checkVals,
         cd.date || '',
         cd.empId || '',
         ...customVals,
@@ -2241,7 +2243,7 @@ function exportToXLSX() {
     }
     
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{wch:10},{wch:10},{wch:6},{wch:6},{wch:6},{wch:13},{wch:10},...customTexts.map(()=>({wch:18})),{wch:30}];
+    ws['!cols'] = [{wch:10},{wch:10},...applicable.map(()=>({wch:6})),{wch:13},{wch:10},...customTexts.map(()=>({wch:18})),{wch:30}];
     
     // Add the uniquely named sheet
     XLSX.utils.book_append_sheet(wb, ws, finalSheetName);
@@ -2254,7 +2256,7 @@ function exportToXLSX() {
     const { pct } = calcProgress(r);
     
     // Format applicable cars
-    const app = ['DA','DB','TA'].filter(k => r.applicable[k]).join(' · ');
+    const app = Object.keys(r.applicable || {}).filter(k => r.applicable[k]).join(' · ');
     
     // Count completed and partial Train Sets
     let tsDoneCount = 0;
@@ -2324,8 +2326,8 @@ function printReport() {
   // 2. Loop through the targetRecords instead of all records
   container.innerHTML = targetRecords.map(r => {
     const { pct } = calcProgress(r);
-    const applicable = ['DA','DB','TA'].filter(k => r.applicable[k]);
-    const headerCols = applicable.map(c => `<th>${c}</th>`).join('');
+    const applicable = Object.keys(r.applicable || {}).filter(k => r.applicable[k]);
+    const headerCols = applicable.map(c => `<th>${esc(c)}</th>`).join('');
     const customTexts = r.customTexts || [];
     const customHeaderCols = customTexts.map(ct => `<th>${esc(ct)}</th>`).join('');
     
@@ -2410,7 +2412,7 @@ function updateFilterButtons() {
 function liveUpdateTsChip(ri, ti) {
   const rec = records[ri];
   if (!rec || !rec.applicable) return;
-  const applicable = ['DA','DB','TA'].filter(k => rec.applicable[k]);
+  const applicable = Object.keys(rec.applicable).filter(k => rec.applicable[k]);
   const checkedCount = applicable.filter(c => {
     const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
     return cb && cb.checked;
@@ -2438,7 +2440,7 @@ function autoFillDate(ri, ti) {
   if (!dateEl || dateEl.value) return; // don't overwrite existing date
   const rec = records[ri];
   if (!rec || !rec.applicable) return;
-  const applicable = ['DA','DB','TA'].filter(k => rec.applicable[k]);
+  const applicable = Object.keys(rec.applicable).filter(k => rec.applicable[k]);
   const anyChecked = applicable.some(c => {
     const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
     return cb && cb.checked;
