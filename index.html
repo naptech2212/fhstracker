@@ -2433,19 +2433,55 @@ function printReport() {
 }
 
 // ════════════════════════════════════════════════
-//  RECORD SNAPSHOT (Print/PDF a single record)
+//  RECORD SNAPSHOT (Print/PDF a single record visually)
 // ════════════════════════════════════════════════
 function printSingleRecord(ri) {
   const r = records[ri];
   if (!r) return;
 
-  const { pct } = calcProgress(r);
+  // 1. Calculate overall progress and stats
+  const { pct, done, total: t } = calcProgress(r);
   const applicable = Object.keys(r.applicable || {}).filter(k => r.applicable[k]);
+  
+  let tsDoneCount = 0;
+  let tsPartialCount = 0;
+
+  // 2. Generate visually styled TS Chips for Print
+  const chips = Array.from({ length: r.trainSets }, (_, i) => {
+    const s = tsStatus(r, i);
+    if(s === 'done') tsDoneCount++;
+    if(s === 'partial') tsPartialCount++;
+    
+    // Use exact hex colors and force background printing
+    let bg = s === 'done' ? '#22C55E' : s === 'partial' ? '#F59E0B' : '#f5f5f5';
+    let col = s === 'done' ? '#FFFFFF' : s === 'partial' ? '#000000' : '#888888';
+    let border = s === 'done' ? '#22C55E' : s === 'partial' ? '#F59E0B' : '#cccccc';
+    
+    return `<span style="display:inline-block; padding:4px 8px; margin:2px; border-radius:4px; font-size:11px; font-family:monospace; font-weight:bold; background-color:${bg}; color:${col}; border:1px solid ${border}; -webkit-print-color-adjust:exact; print-color-adjust:exact;">TS${i+1}</span>`;
+  }).join('');
+
+  // 3. Generate Progress Bar for Print
+  const barColor = pct === 100 ? '#16A34A' : pct > 0 ? '#F59E0B' : '#cccccc';
+  const progressBar = `
+    <div style="margin: 15px 0 20px 0;">
+      <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px; color:#333;">
+        <span><strong>${done}</strong> of <strong>${t}</strong> checks completed</span>
+        <span style="font-family:monospace;">
+          <span style="color:#16A34A; font-weight:bold;">${tsDoneCount} Fully Completed</span> &nbsp;|&nbsp; 
+          <span style="color:#D97706; font-weight:bold;">${tsPartialCount} Partially Completed</span>
+        </span>
+      </div>
+      <div style="height:12px; background:#e5e5e5; border-radius:6px; overflow:hidden; -webkit-print-color-adjust:exact; print-color-adjust:exact;">
+        <div style="height:100%; width:${pct}%; background:${barColor}; -webkit-print-color-adjust:exact; print-color-adjust:exact;"></div>
+      </div>
+    </div>
+  `;
+
+  // 4. Generate Table Rows
   const headerCols = applicable.map(c => `<th>${esc(c)}</th>`).join('');
   const customTexts = r.customTexts || [];
   const customHeaderCols = customTexts.map(ct => `<th>${esc(ct)}</th>`).join('');
 
-  // Build the rows for this specific train set
   const rows = Array.from({ length: r.trainSets }, (_, i) => {
     const cd = r.checks[i] || {};
     const s = tsStatus(r, i);
@@ -2464,21 +2500,32 @@ function printSingleRecord(ri) {
 
   const completedLine = r.completedAt ? ` &nbsp;|&nbsp; <strong>Completed:</strong> ${new Date(r.completedAt).toLocaleString()}` : '';
 
-  // Inject into the hidden print container
+  // 5. Inject into Print Container
   const container = document.getElementById('print-report');
   container.innerHTML = `
     <div class="print-page">
       <div class="print-title">Snapshot: ${r.type} — ${r.ref}</div>
-      <div class="print-sub">${r.desc}${r.remark ? ` | Remark: ${r.remark}` : ''}</div>
-      <div style="font-size:.82rem;margin-bottom:.75rem;">Progress: <strong>${pct}%</strong> &nbsp;|&nbsp; Train Sets: <strong>${r.trainSets}</strong> &nbsp;|&nbsp; Applicable: <strong>${applicable.join(', ')}</strong>${completedLine}</div>
+      <div class="print-sub" style="margin-bottom:10px;">${r.desc}${r.remark ? ` | Remark: ${r.remark}` : ''}</div>
+      
+      <div style="font-size:12px; margin-bottom:10px;">Progress: <strong>${pct}%</strong> &nbsp;|&nbsp; Train Sets: <strong>${r.trainSets}</strong> &nbsp;|&nbsp; Applicable: <strong>${applicable.join(', ')}</strong>${completedLine}</div>
+      
+      <!-- INJECTED VISUAL DASHBOARD ELEMENTS -->
+      ${progressBar}
+      <div style="margin-bottom:20px; display:flex; flex-wrap:wrap; gap:2px;">
+        ${chips}
+      </div>
+
+      <!-- DETAILED DATA TABLE -->
       <table class="print-table">
         <thead><tr><th>TS#</th><th>Status</th>${headerCols}<th>Date</th><th>Emp ID</th>${customHeaderCols}<th>Remarks</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <div style="margin-top:1.5rem;font-size:.75rem;color:#999;">Snapshot Generated: ${new Date().toLocaleString()}</div>
+      <div style="margin-top:20px; font-size:10px; color:#777; border-top:1px solid #ddd; padding-top:10px;">
+        Snapshot Generated: ${new Date().toLocaleString()}
+      </div>
     </div>`;
 
-  addAudit(`Generated snapshot for ${r.ref}`);
+  addAudit(`Generated visual snapshot for ${r.ref}`);
   window.print();
 }
   
