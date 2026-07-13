@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0A1628">
 <meta name="description" content="Fleet/HECP/SECP Tracker - PWA">
 <title>Fleet/HECP/SECP Tracker</title>
-<link rel="manifest" href="manifest.json?v=5.1">
+<link rel="manifest" href="manifest.json?v=5.2">
 <link rel="icon" type="image/png" sizes="512x512" href="./FHS.png">
 <link rel="apple-touch-icon" href="./FHS.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1635,7 +1635,45 @@ function setDashFilter(key, val) {
   renderDashboard();
 }
   
-function renderDashboard(){
+// ════════════════════════════════════════════════
+//  NAVIGATION HELPER: Dashboard -> Checks
+// ════════════════════════════════════════════════
+function jumpToChecks(ri) {
+  // 1. Clear any existing filters/searches in the checks panel so the record is guaranteed to show
+  const searchInput = document.getElementById('checks-search');
+  if (searchInput) searchInput.value = '';
+  checksFilter = { type: '', status: '' };
+  updateFilterButtons();
+
+  // 2. Ensure this specific record's accordion will be expanded
+  checksExpanded.add(ri);
+
+  // 3. Trigger the panel switch
+  showPanel('checks');
+
+  // 4. showPanel uses a 50ms timeout to render. We wait 100ms to ensure the DOM is ready, then scroll.
+  setTimeout(() => {
+    const targetCard = document.getElementById(`check-card-${ri}`);
+    if (targetCard) {
+      // Scroll into view
+      targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      
+      // Optional UX: Flash the border so the user knows exactly which one they jumped to
+      const originalBorder = targetCard.style.borderColor;
+      const originalShadow = targetCard.style.boxShadow;
+      
+      targetCard.style.borderColor = 'var(--accent)';
+      targetCard.style.boxShadow = '0 0 20px var(--accent-glow)';
+      
+      setTimeout(() => {
+        targetCard.style.borderColor = originalBorder;
+        targetCard.style.boxShadow = originalShadow;
+      }, 1500);
+    }
+  }, 100);
+}
+  
+  function renderDashboard(){
   const total = records.length;
   let sumPct = 0, complete = 0;
   
@@ -1693,16 +1731,24 @@ function renderDashboard(){
     let inProgress = [];
     let yetToStart = [];
 
-    catRecords.forEach(r => {
+      catRecords.forEach(r => {
       const { pct, done, total: t } = calcProgress(r);
       let tsDoneCount = 0;
       let tsPartialCount = 0;
+      
+      // NEW: Find the absolute index of this record in the main records array
+      const originalIndex = records.findIndex(rec => rec.id === r.id);
       
       const chips = Array.from({ length: r.trainSets }, (_, i) => {
         const s = tsStatus(r, i);
         if(s === 'done') tsDoneCount++;
         if(s === 'partial') tsPartialCount++;
-        return `<span class="ts-chip ${s}">TS${i+1}</span>`;
+        // NEW: Added cursor, hover scale, and onclick navigation
+        return `<span class="ts-chip ${s}" style="cursor:pointer; transition:transform 0.2s; display:inline-block;" 
+                  onmouseover="this.style.transform='scale(1.1)'" 
+                  onmouseout="this.style.transform='scale(1)'" 
+                  onclick="jumpToChecks(${originalIndex})" 
+                  title="Click to update in Status panel">TS${i+1}</span>`;
       }).join('');
       
       const appTags = ['DA','DB','TA'].map(k => `<span class="app-tag ${r.applicable && r.applicable[k] ? 'active' : ''}">${k}</span>`).join('');
@@ -2595,7 +2641,7 @@ function renderChecks(){
     // ✅ PERF: only build the (expensive) TS checklist rows when the card is actually expanded
     const body = isExpanded ? buildTsBodyHtml(ri) : '';
 
-    return `<div class="record-card">
+    return `<div class="record-card" id="check-card-${ri}">
       <div class="record-header">
         <div class="record-meta">
           <div><span class="record-type ${r.type.toLowerCase()}">${r.type}</span>${lockBadge}</div>
