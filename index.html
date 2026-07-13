@@ -1278,7 +1278,7 @@ function showPanel(id){
 //  HELPERS
 // ════════════════════════════════════════════════
 function calcProgress(rec){
-  const applicable = Object.keys(rec.applicable || {}).filter(k => rec.applicable[k]);
+  const applicable = ['DA','DB','TA'].filter(k => rec.applicable && rec.applicable[k]);
   if(!applicable.length || !rec.trainSets) return {pct:0,done:0,total:0};
   let done=0;
   const total = rec.trainSets * applicable.length;
@@ -1292,7 +1292,7 @@ function calcProgress(rec){
 }
 
 function tsStatus(rec, tsIdx){
-  const applicable = Object.keys(rec.applicable || {}).filter(k => rec.applicable[k]);
+  const applicable = ['DA','DB','TA'].filter(k => rec.applicable && rec.applicable[k]);
   if(!applicable.length) return 'pending';
   const checks = rec.checks || {}; // SAFEGUARD
   const done = applicable.filter(c => checks[tsIdx] && checks[tsIdx][c]).length;
@@ -1705,9 +1705,7 @@ function renderDashboard(){
         return `<span class="ts-chip ${s}">TS${i+1}</span>`;
       }).join('');
       
-      const customCheckKeys = Object.keys(r.applicable || {}).filter(k => !['DA','DB','TA'].includes(k) && r.applicable[k]);
-      const appTags = ['DA','DB','TA'].map(k => `<span class="app-tag ${r.applicable && r.applicable[k] ? 'active' : ''}">${k}</span>`).join('')
-        + customCheckKeys.map(k => `<span class="app-tag active">${esc(k)}</span>`).join('');
+      const appTags = ['DA','DB','TA'].map(k => `<span class="app-tag ${r.applicable && r.applicable[k] ? 'active' : ''}">${k}</span>`).join('');
       const fc = pct === 100 ? 'success' : pct > 0 ? 'warn' : '';
       
       // Card template
@@ -1841,7 +1839,7 @@ function renderRecordsTable(){
   tbody.innerHTML = records.map((r,ri)=>{
     const {pct}=calcProgress(r);
     const cl=pct===100?'pct-high':pct>0?'pct-mid':'pct-low';
-    const app=Object.keys(r.applicable || {}).filter(k => r.applicable[k]).join(' · ');
+    const app=['DA','DB','TA'].filter(k => r.applicable && r.applicable[k]).join(' · ');
     
     // Calculate done and partial counts
     let tsDoneCount = 0;
@@ -2268,7 +2266,7 @@ function exportToXLSX() {
     const { pct } = calcProgress(r);
     
     // Format applicable cars
-    const app = Object.keys(r.applicable || {}).filter(k => r.applicable[k]).join(' · ');
+    const app = ['DA','DB','TA'].filter(k => r.applicable[k]).join(' · ');
     
     // Count completed and partial Train Sets
     let tsDoneCount = 0;
@@ -2424,7 +2422,7 @@ function updateFilterButtons() {
 function liveUpdateTsChip(ri, ti) {
   const rec = records[ri];
   if (!rec || !rec.applicable) return;
-  const applicable = Object.keys(rec.applicable).filter(k => rec.applicable[k]);
+  const applicable = ['DA','DB','TA'].filter(k => rec.applicable[k]);
   const checkedCount = applicable.filter(c => {
     const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
     return cb && cb.checked;
@@ -2445,14 +2443,17 @@ function liveUpdateTsChip(ri, ti) {
 }
   
 // ════════════════════════════════════════════════
-//  ✅ FIX 7: AUTO-FILL DATE ON CHECKBOX TICK
+//  FIX 7: AUTO-FILL DATE ON CHECKBOX TICK
+//  ⛔ DISABLED — not required as of now. Kept here (commented) in case it's needed later.
+//  Also note: the two onchange calls to autoFillDate() in buildTsBodyHtml are commented out too.
 // ════════════════════════════════════════════════
+/*
 function autoFillDate(ri, ti) {
   const dateEl = document.getElementById(`date-${ri}-${ti}`);
   if (!dateEl || dateEl.value) return; // don't overwrite existing date
   const rec = records[ri];
   if (!rec || !rec.applicable) return;
-  const applicable = Object.keys(rec.applicable).filter(k => rec.applicable[k]);
+  const applicable = ['DA','DB','TA'].filter(k => rec.applicable[k]);
   const anyChecked = applicable.some(c => {
     const cb = document.getElementById(`chk-${ri}-${ti}-${c}`);
     return cb && cb.checked;
@@ -2462,6 +2463,7 @@ function autoFillDate(ri, ti) {
     isDirty = true;
   }
 }
+*/
   
 // ✅ PERF FIX: Build the (expensive) train-set rows for a single record
   // on demand only — this used to run for EVERY record on EVERY render.
@@ -2483,14 +2485,14 @@ function autoFillDate(ri, ti) {
       const checks=applicable.map(c=>{
         const checked=r.checks[ti]&&r.checks[ti][c]?'checked':'';
         return `<div class="check-item">
-          <input type="checkbox" id="chk-${ri}-${ti}-${c}" ${checked} ${disabledAttr} onchange="isDirty=true;${isReadOnly ? '' : `liveUpdateTsChip(${ri},${ti});autoFillDate(${ri},${ti});`}">
+          <input type="checkbox" id="chk-${ri}-${ti}-${c}" ${checked} ${disabledAttr} onchange="isDirty=true;${isReadOnly ? '' : `liveUpdateTsChip(${ri},${ti});/* autoFillDate(${ri},${ti}); — disabled: not required as of now */`}">
           <label for="chk-${ri}-${ti}-${c}">${c}</label>
         </div>`;
       }).join('');
 
       const manualPartialChecked = (r.checks[ti] && r.checks[ti]['partial']) ? 'checked' : '';
       const manualPartialHtml = `<div class="check-item" style="margin-left:.5rem; padding-left:.5rem; border-left:1px solid var(--border);">
-          <input type="checkbox" id="chk-${ri}-${ti}-partial" ${manualPartialChecked} ${disabledAttr} onchange="isDirty=true;${isReadOnly ? '' : `liveUpdateTsChip(${ri},${ti});autoFillDate(${ri},${ti});`}">
+          <input type="checkbox" id="chk-${ri}-${ti}-partial" ${manualPartialChecked} ${disabledAttr} onchange="isDirty=true;${isReadOnly ? '' : `liveUpdateTsChip(${ri},${ti});/* autoFillDate(${ri},${ti}); — disabled: not required as of now */`}">
           <label for="chk-${ri}-${ti}-partial" style="color:var(--warn)">Partial</label>
         </div>`;
 
