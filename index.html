@@ -1638,8 +1638,8 @@ function setDashFilter(key, val) {
 // ════════════════════════════════════════════════
 //  NAVIGATION HELPER: Dashboard -> Checks
 // ════════════════════════════════════════════════
-function jumpToChecks(ri) {
-  // 1. Clear any existing filters/searches in the checks panel so the record is guaranteed to show
+function jumpToChecks(ri, ti) {
+  // 1. Clear any existing filters/searches
   const searchInput = document.getElementById('checks-search');
   if (searchInput) searchInput.value = '';
   checksFilter = { type: '', status: '' };
@@ -1651,26 +1651,29 @@ function jumpToChecks(ri) {
   // 3. Trigger the panel switch
   showPanel('checks');
 
-  // 4. showPanel uses a 50ms timeout to render. We wait 100ms to ensure the DOM is ready, then scroll.
+  // 4. Wait for DOM to render, then scroll to the exact Train Set row
   setTimeout(() => {
-    const targetCard = document.getElementById(`check-card-${ri}`);
-    if (targetCard) {
-      // Scroll into view
-      targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const targetRow = document.getElementById(`ts-row-${ri}-${ti}`);
+    
+    if (targetRow) {
+      // Scroll the exact TS row into the center of the view
+      targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
       
-      // Optional UX: Flash the border so the user knows exactly which one they jumped to
-      const originalBorder = targetCard.style.borderColor;
-      const originalShadow = targetCard.style.boxShadow;
+      // Save original styles
+      const originalBg = targetRow.style.backgroundColor;
+      const originalBorder = targetRow.style.borderColor;
       
-      targetCard.style.borderColor = 'var(--accent)';
-      targetCard.style.boxShadow = '0 0 20px var(--accent-glow)';
+      // Apply highlight (cyan glow)
+      targetRow.style.backgroundColor = 'var(--accent-glow)';
+      targetRow.style.borderColor = 'var(--accent)';
       
+      // Remove highlight after 2 seconds
       setTimeout(() => {
-        targetCard.style.borderColor = originalBorder;
-        targetCard.style.boxShadow = originalShadow;
-      }, 1500);
+        targetRow.style.backgroundColor = originalBg || '';
+        targetRow.style.borderColor = originalBorder || '';
+      }, 2000);
     }
-  }, 100);
+  }, 100); // 100ms gives the DOM enough time to render the expanded accordion
 }
   
   function renderDashboard(){
@@ -1747,7 +1750,7 @@ function jumpToChecks(ri) {
         return `<span class="ts-chip ${s}" style="cursor:pointer; transition:transform 0.2s; display:inline-block;" 
                   onmouseover="this.style.transform='scale(1.1)'" 
                   onmouseout="this.style.transform='scale(1)'" 
-                  onclick="jumpToChecks(${originalIndex})" 
+                  onclick="jumpToChecks(${originalIndex}, ${i})" 
                   title="Click to update in Status panel">TS${i+1}</span>`;
       }).join('');
       
@@ -2552,7 +2555,7 @@ function autoFillDate(ri, ti) {
         return `<input type="text" id="ct-${ri}-${ti}-${idx}" value="${esc(existingVal)}" placeholder="${esc(ct)}" ${disabledAttr} oninput="isDirty=true;" style="flex:1;min-width:120px;padding:.35rem .65rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.78rem;font-family:var(--sans);outline:none; ${isReadOnly ? 'opacity:0.6; cursor:not-allowed;' : ''}" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">`;
       }).join('');
 
-      return `<div class="ts-check-row" style="flex-wrap:wrap;gap:.5rem">
+      return `<div class="ts-check-row" id="ts-row-${ri}-${ti}" style="flex-wrap:wrap;gap:.5rem; transition: background-color 0.5s ease, border-color 0.5s ease;">
         <div class="ts-row-top">
           <span class="ts-check-label">Train Set ${ti+1} <span class="ts-chip ${s}" style="margin-left:.5rem">TS${ti+1}</span>
             <span class="ts-live-chip ${s}" id="live-chip-${ri}-${ti}">${s.charAt(0).toUpperCase()+s.slice(1)}</span>
