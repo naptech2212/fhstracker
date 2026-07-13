@@ -1779,7 +1779,10 @@ function jumpToChecks(ri, ti) {
               </div>
           <div class="progress-bar-track"><div class="progress-bar-fill ${fc}" style="width:${pct}%"></div></div>
         </div>
-        <button class="chips-toggle" onclick="toggleChips('${cardId}',this)">▼ Show TS</button>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <button class="chips-toggle" onclick="toggleChips('${cardId}',this)">▼ Show TS</button>
+          <button class="cf-btn" style="padding:.2rem .5rem; font-size:.65rem; border-color:transparent;" onclick="printSingleRecord(${originalIndex})" title="Save/Print Snapshot of this record">📷 Snapshot</button>
+        </div>
         <div class="ts-chips-wrap" id="${cardId}">
           <div class="trainset-chips">${chips}</div>
         </div>
@@ -2427,7 +2430,57 @@ function printReport() {
   
   addAudit(auditMsg);
   window.print();
-} 
+}
+
+// ════════════════════════════════════════════════
+//  RECORD SNAPSHOT (Print/PDF a single record)
+// ════════════════════════════════════════════════
+function printSingleRecord(ri) {
+  const r = records[ri];
+  if (!r) return;
+
+  const { pct } = calcProgress(r);
+  const applicable = Object.keys(r.applicable || {}).filter(k => r.applicable[k]);
+  const headerCols = applicable.map(c => `<th>${esc(c)}</th>`).join('');
+  const customTexts = r.customTexts || [];
+  const customHeaderCols = customTexts.map(ct => `<th>${esc(ct)}</th>`).join('');
+
+  // Build the rows for this specific train set
+  const rows = Array.from({ length: r.trainSets }, (_, i) => {
+    const cd = r.checks[i] || {};
+    const s = tsStatus(r, i);
+    const checkCols = applicable.map(c => `<td style="text-align:center">${cd[c] ? '✓' : '—'}</td>`).join('');
+    const customCols = customTexts.map((ct, idx) => `<td>${esc(cd[`ct_${idx}`]) || '—'}</td>`).join('');
+    return `<tr>
+      <td>TS${i+1}</td>
+      <td class="s-${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</td>
+      ${checkCols}
+      <td>${cd.date||'—'}</td>
+      <td>${cd.empId||'—'}</td>
+      ${customCols}
+      <td>${cd.remark||''}</td>
+    </tr>`;
+  }).join('');
+
+  const completedLine = r.completedAt ? ` &nbsp;|&nbsp; <strong>Completed:</strong> ${new Date(r.completedAt).toLocaleString()}` : '';
+
+  // Inject into the hidden print container
+  const container = document.getElementById('print-report');
+  container.innerHTML = `
+    <div class="print-page">
+      <div class="print-title">Snapshot: ${r.type} — ${r.ref}</div>
+      <div class="print-sub">${r.desc}${r.remark ? ` | Remark: ${r.remark}` : ''}</div>
+      <div style="font-size:.82rem;margin-bottom:.75rem;">Progress: <strong>${pct}%</strong> &nbsp;|&nbsp; Train Sets: <strong>${r.trainSets}</strong> &nbsp;|&nbsp; Applicable: <strong>${applicable.join(', ')}</strong>${completedLine}</div>
+      <table class="print-table">
+        <thead><tr><th>TS#</th><th>Status</th>${headerCols}<th>Date</th><th>Emp ID</th>${customHeaderCols}<th>Remarks</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="margin-top:1.5rem;font-size:.75rem;color:#999;">Snapshot Generated: ${new Date().toLocaleString()}</div>
+    </div>`;
+
+  addAudit(`Generated snapshot for ${r.ref}`);
+  window.print();
+}
   
 // ════════════════════════════════════════════════
 //  ADMIN — COMPLIANCE CHECKS
