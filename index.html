@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0A1628">
 <meta name="description" content="Fleet/HECP/SECP Tracker - PWA">
 <title>Fleet/HECP/SECP Tracker</title>
-<link rel="manifest" href="manifest.json?v=5.2">
+<link rel="manifest" href="manifest.json?v=6.0">
 <link rel="icon" type="image/png" sizes="512x512" href="./FHS.png">
 <link rel="apple-touch-icon" href="./FHS.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1751,7 +1751,7 @@ function jumpToChecks(ri, ti) {
                   onmouseover="this.style.transform='scale(1.1)'" 
                   onmouseout="this.style.transform='scale(1)'" 
                   onclick="jumpToChecks(${originalIndex}, ${i})" 
-                  title="Click to update in Status panel">TS${i+1}</span>`;
+                  title="Click to view/update in Status panel">TS${i+1}</span>`;
       }).join('');
       
       const appTags = ['DA','DB','TA'].map(k => `<span class="app-tag ${r.applicable && r.applicable[k] ? 'active' : ''}">${k}</span>`).join('');
