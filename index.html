@@ -1329,11 +1329,11 @@ function getAssignedList(rec){
   return [rec.assignedTo];
 }
 
-// Human-readable label for a record's assignees, e.g. "Jane D., Sam K."
+// Human-readable label for a record's assignees, e.g. "jsmith, mchen"
 function assignedListLabel(rec){
   const list = getAssignedList(rec);
   if(!list.length) return '';
-  return list.map(u => (userMeta[u] && userMeta[u].label) ? userMeta[u].label : u).join(', ');
+  return list.join(', ');
 }
 
 function canEditRecord(rec){
