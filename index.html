@@ -677,9 +677,13 @@
         
         <div id="bulk-assign-bar" style="display:none;align-items:center;gap:.6rem;margin:.75rem 0;padding:.6rem .8rem;background:var(--bg-input);border:1px solid var(--accent);border-radius:var(--radius);flex-wrap:wrap;">
           <span style="font-size:.82rem;color:var(--text-pri)"><b id="bulk-assign-count">0</b> record(s) selected</span>
-          <select id="bulk-assign-select" style="padding:.35rem .6rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.8rem;font-family:var(--sans);outline:none;">
-            <option value="">— Unassign —</option>
-          </select>
+          <div class="assign-dropdown-wrap" style="position:relative;">
+            <button type="button" id="assign-btn-bulk" onclick="toggleAssignDropdown('bulk')"
+              style="padding:.35rem .6rem;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.8rem;font-family:var(--sans);cursor:pointer;">
+              Choose users ▾
+            </button>
+            <div id="assign-dropdown-bulk" class="assign-dropdown" style="display:none;position:absolute;top:100%;left:0;z-index:50;min-width:200px;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 12px rgba(0,0,0,.3);padding:.3rem;max-height:220px;overflow-y:auto;"></div>
+          </div>
           <button onclick="bulkAssignRecords()" class="btn-save" style="padding:.35rem .9rem;font-size:.8rem;">Assign Selected</button>
           <button onclick="clearRecordSelection()" class="btn-cancel" style="padding:.35rem .9rem;font-size:.8rem;">Clear Selection</button>
         </div>
@@ -1317,15 +1321,31 @@ function fmtTime(iso){ const d=new Date(iso); return d.toLocaleDateString()+' '+
 // ════════════════════════════════════════════════
 //  RECORD ASSIGNMENT (restrict editing to one user)
 // ════════════════════════════════════════════════
+// Normalizes rec.assignedTo into an array, transparently upgrading legacy
+// records that stored a single username as a plain string.
+function getAssignedList(rec){
+  if(!rec || !rec.assignedTo) return [];
+  if(Array.isArray(rec.assignedTo)) return rec.assignedTo;
+  return [rec.assignedTo];
+}
+
+// Human-readable label for a record's assignees, e.g. "Jane D., Sam K."
+function assignedListLabel(rec){
+  const list = getAssignedList(rec);
+  if(!list.length) return '';
+  return list.map(u => (userMeta[u] && userMeta[u].label) ? userMeta[u].label : u).join(', ');
+}
+
 function canEditRecord(rec){
   if(!currentUser) return false;
   if(currentUser.role === 'superadmin') return true;   // Super Admin can always edit
   if(currentUser.role === 'viewer') return false;       // Viewers never edit
-  if(!rec.assignedTo) return true;                      // Unassigned -> any admin can edit
-  return rec.assignedTo === currentUser.name;           // Assigned -> only that user
+  const assigned = getAssignedList(rec);
+  if(!assigned.length) return true;                     // Unassigned -> any admin can edit
+  return assigned.includes(currentUser.name);            // Assigned -> only those users
 }
 
-// Users allowed to be assigned as the sole editor of a record (admins + superadmin)
+// Users allowed to be assigned as editors of a record (admins + superadmin)
 function getAssignableUsers(){
   return Object.keys(userMeta).filter(u => userMeta[u].role === 'admin' || userMeta[u].role === 'superadmin');
 }
@@ -1367,32 +1387,83 @@ function updateBulkAssignBar(){
 }
 
 // Assign a single record (dropdown in the records table) to a user, or '' to unassign
-function assignRecordUser(ri, username){
+// Toggle open/close of an assign-dropdown checklist. Pass the record index (ri),
+// or the string 'bulk' for the bulk-assign bar's dropdown. Closes any other open one.
+function toggleAssignDropdown(ri){
+  const targetId = `assign-dropdown-${ri}`;
+  document.querySelectorAll('.assign-dropdown').forEach(d=>{
+    if(d.id !== targetId) d.style.display = 'none';
+  });
+  const dd = document.getElementById(targetId);
+  if(dd) dd.style.display = (dd.style.display === 'block') ? 'none' : 'block';
+}
+
+// Close any open assign-dropdowns when clicking outside of them
+document.addEventListener('click', function(e){
+  if(!e.target.closest('.assign-dropdown-wrap')){
+    document.querySelectorAll('.assign-dropdown').forEach(d=>d.style.display='none');
+  }
+});
+
+// Toggle a single user on/off a single record's assignee list (checkbox in the per-row dropdown)
+function toggleRecordAssignee(ri, idx, checked){
   if(!currentUser || currentUser.role !== 'superadmin') return;
   const rec = records[ri];
   if(!rec) return;
-  rec.assignedTo = username || '';
-  addAudit(username ? `Assigned record ${rec.ref} to ${username}` : `Unassigned record ${rec.ref}`);
+  const username = getAssignableUsers()[idx];
+  if(!username) return;
+  let list = getAssignedList(rec).slice();
+  if(checked){ if(!list.includes(username)) list.push(username); }
+  else { list = list.filter(u => u !== username); }
+  rec.assignedTo = list;
+  addAudit(list.length ? `Assigned record ${rec.ref} to ${list.join(', ')}` : `Unassigned record ${rec.ref}`);
   save();
-  showToast(username ? `Record assigned to ${username}` : 'Record unassigned');
+  const btn = document.getElementById(`assign-btn-${ri}`);
+  if(btn) btn.textContent = (list.length ? assignedListLabel(rec) : '— Unassigned —') + ' ▾';
+  showToast(list.length ? 'Record assignees updated' : 'Record unassigned');
+}
+
+// Clear all assignees from a single record
+function clearRecordAssigneesRow(ri){
+  if(!currentUser || currentUser.role !== 'superadmin') return;
+  const rec = records[ri];
+  if(!rec) return;
+  rec.assignedTo = [];
+  addAudit(`Unassigned record ${rec.ref}`);
+  save();
+  showToast('Record unassigned');
   renderRecordsTable();
 }
 
-// Bulk-assign every selected record to the chosen user
+// Selected users for the bulk-assign bar's dropdown
+let bulkAssignSelectedUsers = new Set();
+
+// Toggle a single user on/off the bulk-assign selection (checkbox in the bulk dropdown)
+function toggleBulkAssignUser(idx, checked){
+  const username = getAssignableUsers()[idx];
+  if(!username) return;
+  if(checked) bulkAssignSelectedUsers.add(username);
+  else bulkAssignSelectedUsers.delete(username);
+  const btn = document.getElementById('assign-btn-bulk');
+  if(btn) btn.textContent = (bulkAssignSelectedUsers.size ? `${bulkAssignSelectedUsers.size} user(s) selected` : 'Choose users') + ' ▾';
+}
+
+// Bulk-assign every selected record to the chosen set of users (replaces existing assignees)
 function bulkAssignRecords(){
   if(!currentUser || currentUser.role !== 'superadmin') return;
-  const username = document.getElementById('bulk-assign-select')?.value || '';
   if(!selectedRecordIndices.size){ showToast('No records selected', 'err'); return; }
+  const usernames = Array.from(bulkAssignSelectedUsers);
   selectedRecordIndices.forEach(ri => {
     const rec = records[ri];
-    if(rec) rec.assignedTo = username;
+    if(rec) rec.assignedTo = usernames.slice();
   });
-  addAudit(username
-    ? `Bulk-assigned ${selectedRecordIndices.size} record(s) to ${username}`
+  addAudit(usernames.length
+    ? `Bulk-assigned ${selectedRecordIndices.size} record(s) to ${usernames.join(', ')}`
     : `Bulk-unassigned ${selectedRecordIndices.size} record(s)`);
   save();
-  showToast(username ? `${selectedRecordIndices.size} record(s) assigned to ${username}` : 'Selected records unassigned');
+  showToast(usernames.length ? `${selectedRecordIndices.size} record(s) assigned to ${usernames.length} user(s)` : 'Selected records unassigned');
   clearRecordSelection();
+  bulkAssignSelectedUsers.clear();
   renderRecordsTable();
 }
 
@@ -1429,7 +1500,7 @@ function saveRecord(){
   
   const rec = {
     id: Date.now().toString(), type, ref, desc, trainSets: tsCount,
-    applicable: applicable, customTexts: customTexts, checks:{}, remark:'', assignedTo:'',
+    applicable: applicable, customTexts: customTexts, checks:{}, remark:'', assignedTo:[],
     createdBy: currentUser.name, createdAt: new Date().toISOString()
   };
   records.push(rec);
@@ -1871,12 +1942,15 @@ function renderRecordsTable(){
   // CHANGED: Make the selection column visible to ALL users so they can choose what to print
   document.getElementById('th-select').style.display = ''; 
 
-  // Populate / refresh the bulk-assign user dropdown (superadmin only)
-  const bulkSelect = document.getElementById('bulk-assign-select');
-  if (isSA && bulkSelect) {
+  // Populate / refresh the bulk-assign user checkbox dropdown (superadmin only)
+  const bulkDropdown = document.getElementById('assign-dropdown-bulk');
+  if (isSA && bulkDropdown) {
     const assignable = getAssignableUsers();
-    bulkSelect.innerHTML = '<option value="">— Unassign —</option>' +
-      assignable.map(u => `<option value="${esc(u)}">${esc(userMeta[u].label)} (${esc(u)})</option>`).join('');
+    bulkDropdown.innerHTML = assignable.map((u,idx) => `
+      <label style="display:flex;align-items:center;gap:.4rem;padding:.3rem .4rem;cursor:pointer;font-size:.75rem;color:var(--text-pri);white-space:nowrap;">
+        <input type="checkbox" ${bulkAssignSelectedUsers.has(u)?'checked':''} onchange="toggleBulkAssignUser(${idx}, this.checked)">
+        ${esc(userMeta[u].label)} (${esc(u)})
+      </label>`).join('');
   }
   
   // Note: updateBulkAssignBar() already has a built-in check so non-superadmins won't see the assignment menu even when they check boxes!
@@ -1929,12 +2003,26 @@ function renderRecordsTable(){
     // CHANGED: Removed the `isSA ?` restriction so every user gets the checkbox rendered
     const selectCell = `<td style="text-align:center"><input type="checkbox" class="rec-select-cb" ${selectedRecordIndices.has(ri) ? 'checked' : ''} onchange="toggleRecordSelect(${ri}, this.checked)"></td>`;
     
+    const assignedListRow = getAssignedList(r);
+    const assignedBtnLabel = (assignedListRow.length ? assignedListLabel(r) : '— Unassigned —') + ' ▾';
     const assignedCell = isSA
       ? `<td>
-           <select onchange="assignRecordUser(${ri}, this.value)" style="padding:.28rem .5rem;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.75rem;font-family:var(--sans);outline:none;">
-             <option value="">— Unassigned —</option>
-             ${getAssignableUsers().map(u => `<option value="${esc(u)}" ${r.assignedTo===u?'selected':''}>${esc(userMeta[u].label)} (${esc(u)})</option>`).join('')}
-           </select>
+           <div class="assign-dropdown-wrap" style="position:relative;">
+             <button type="button" id="assign-btn-${ri}" onclick="toggleAssignDropdown(${ri})"
+               style="padding:.28rem .5rem;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-pri);font-size:.75rem;font-family:var(--sans);cursor:pointer;max-width:170px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+               ${esc(assignedBtnLabel)}
+             </button>
+             <div id="assign-dropdown-${ri}" class="assign-dropdown" style="display:none;position:absolute;top:100%;left:0;z-index:50;min-width:190px;background:var(--bg-deep);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 12px rgba(0,0,0,.3);padding:.3rem;max-height:220px;overflow-y:auto;">
+               ${getAssignableUsers().map((u,idx) => `
+                 <label style="display:flex;align-items:center;gap:.4rem;padding:.3rem .4rem;cursor:pointer;font-size:.75rem;color:var(--text-pri);white-space:nowrap;">
+                   <input type="checkbox" ${assignedListRow.includes(u)?'checked':''} onchange="toggleRecordAssignee(${ri}, ${idx}, this.checked)">
+                   ${esc(userMeta[u].label)} (${esc(u)})
+                 </label>`).join('')}
+               <div style="border-top:1px solid var(--border);margin-top:.3rem;padding-top:.3rem;">
+                 <button type="button" onclick="clearRecordAssigneesRow(${ri})" style="width:100%;padding:.25rem;background:transparent;border:1px solid var(--border);border-radius:var(--radius);color:var(--text-sec);font-size:.72rem;cursor:pointer;font-family:var(--sans);">Clear all</button>
+               </div>
+             </div>
+           </div>
          </td>`
       : '';
       
@@ -2627,7 +2715,7 @@ function autoFillDate(ri, ti) {
     
     const lockBanner = (locked && !isViewer)
       ? `<div style="margin-bottom:.75rem;padding:.5rem .8rem;background:#F59E0B15;border:1px solid #F59E0B40;border-radius:var(--radius);color:var(--warn);font-size:.8rem;">
-           🔒 This record is assigned to <b>${esc(r.assignedTo)}</b> — only that user (or Super Admin) can edit it.
+           🔒 This record is assigned to <b>${esc(assignedListLabel(r))}</b> — only ${getAssignedList(r).length > 1 ? 'those users' : 'that user'} (or Super Admin) can edit it.
          </div>` : '';
 
     const tsRows = Array.from({length:r.trainSets},(_,ti)=>{
@@ -2739,7 +2827,7 @@ function renderChecks(){
 
     const isExpanded = checksExpanded.has(ri);
     const locked = !canEditRecord(r);
-    const lockBadge = (r.assignedTo && locked) ? ` <span title="Assigned to ${esc(r.assignedTo)}">🔒</span>` : '';
+    const lockBadge = (getAssignedList(r).length && locked) ? ` <span title="Assigned to ${esc(assignedListLabel(r))}">🔒</span>` : '';
 
     // ✅ PERF: only build the (expensive) TS checklist rows when the card is actually expanded
     const body = isExpanded ? buildTsBodyHtml(ri) : '';
