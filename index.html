@@ -2704,7 +2704,7 @@ function autoFillDate(ri, ti) {
   
 // ✅ PERF FIX: Build the (expensive) train-set rows for a single record
   // on demand only — this used to run for EVERY record on EVERY render.
-  function buildTsBodyHtml(ri){
+function buildTsBodyHtml(ri){
     const r = records[ri];
     const isViewer = currentUser && currentUser.role === 'viewer';
     const locked = !canEditRecord(r);
@@ -2712,6 +2712,9 @@ function autoFillDate(ri, ti) {
     const disabledAttr = isReadOnly ? 'disabled' : '';
     const applicable = Object.keys(r.applicable || {}).filter(k=>r.applicable[k]);
     const customTexts = r.customTexts || [];
+    
+    // NEW: Check if the current user is a superadmin
+    const isSA = currentUser && currentUser.role === 'superadmin';
     
     const lockBanner = (locked && !isViewer)
       ? `<div style="margin-bottom:.75rem;padding:.5rem .8rem;background:#F59E0B15;border:1px solid #F59E0B40;border-radius:var(--radius);color:var(--warn);font-size:.8rem;">
@@ -2722,14 +2725,14 @@ function autoFillDate(ri, ti) {
       const checks=applicable.map(c=>{
         const checked=r.checks[ti]&&r.checks[ti][c]?'checked':'';
         return `<div class="check-item">
-          <input type="checkbox" id="chk-${ri}-${ti}-${c}" ${checked} ${disabledAttr} onchange="isDirty=true;${isReadOnly ? '' : `liveUpdateTsChip(${ri},${ti});/* autoFillDate(${ri},${ti}); — disabled: not required as of now */`}">
+          <input type="checkbox" id="chk-${ri}-${ti}-${c}" ${checked} ${disabledAttr} onchange="isDirty=true;${isReadOnly ? '' : `liveUpdateTsChip(${ri},${ti});`}">
           <label for="chk-${ri}-${ti}-${c}">${c}</label>
         </div>`;
       }).join('');
 
       const manualPartialChecked = (r.checks[ti] && r.checks[ti]['partial']) ? 'checked' : '';
       const manualPartialHtml = `<div class="check-item" style="margin-left:.5rem; padding-left:.5rem; border-left:1px solid var(--border);">
-          <input type="checkbox" id="chk-${ri}-${ti}-partial" ${manualPartialChecked} ${disabledAttr} onchange="isDirty=true;${isReadOnly ? '' : `liveUpdateTsChip(${ri},${ti});/* autoFillDate(${ri},${ti}); — disabled: not required as of now */`}">
+          <input type="checkbox" id="chk-${ri}-${ti}-partial" ${manualPartialChecked} ${disabledAttr} onchange="isDirty=true;${isReadOnly ? '' : `liveUpdateTsChip(${ri},${ti});`}">
           <label for="chk-${ri}-${ti}-partial" style="color:var(--warn)">Partial</label>
         </div>`;
 
@@ -2767,7 +2770,8 @@ function autoFillDate(ri, ti) {
       </div>`;
     }).join('');
 
-    const saveAllBtn = isReadOnly ? '' : `<div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;"><button onclick="saveRecordChecks(${ri}, this)" class="btn-save" style="padding: .6rem 1.5rem; white-space: nowrap;">Save Complete Record</button></div>`;
+    // NEW: "Save Complete Record" restricted to Super Admin only
+    const saveAllBtn = (isSA && !isReadOnly) ? `<div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;"><button onclick="saveRecordChecks(${ri}, this)" class="btn-save" style="padding: .6rem 1.5rem; white-space: nowrap;">Save Complete Record</button></div>` : '';
 
     return `<div class="trainset-section">${lockBanner}<div class="ts-header">Train Sets — Check applicable cars</div>${tsRows}${saveAllBtn}</div>`;
   }
@@ -2865,6 +2869,9 @@ function saveSingleTsCheck(ri, ti, btn) {
     const rec = records[ri];
     const applicable = Object.keys(rec.applicable || {}).filter(k=>rec.applicable[k]);
 
+    // 1. Capture OLD Status before values are updated
+    const oldStatus = tsStatus(rec, ti);
+
     if(!rec.checks[ti]) rec.checks[ti] = {};
 
     const empEl = document.getElementById(`emp-${ri}-${ti}`);
@@ -2889,7 +2896,28 @@ function saveSingleTsCheck(ri, ti, btn) {
       }
     }
 
-    addAudit(`Updated TS${ti+1} details for ${rec.ref}`);
+    // 2. Capture NEW Status and details
+    const newStatus = tsStatus(rec, ti);
+    let checkedItems = [];
+    
+    applicable.forEach(c => {
+        if (rec.checks[ti][c]) checkedItems.push(c);
+    });
+    
+    if (rec.checks[ti]['partial']) checkedItems.push('Manual Partial');
+    
+    if (rec.customTexts) {
+        rec.customTexts.forEach((ct, idx) => {
+            const val = rec.checks[ti][`ct_${idx}`];
+            if (val) checkedItems.push(`${ct}: ${val}`);
+        });
+    }
+
+    const detailsStr = checkedItems.length > 0 ? checkedItems.join(', ') : 'None';
+
+    // 3. Save to Audit Log with detailed transitions
+    addAudit(`Updated TS${ti+1} for ${rec.ref} | Status changed: [${oldStatus.toUpperCase()} ➔ ${newStatus.toUpperCase()}] | Checked: ${detailsStr}`);
+
     save();
     isDirty = false;
 
@@ -2927,6 +2955,12 @@ function saveSingleTsCheck(ri, ti, btn) {
 }  
     
 function saveRecordChecks(ri, btn) {
+  // NEW: Backend restriction
+  if (!currentUser || currentUser.role !== 'superadmin') {
+      showToast('Only Super Admin can use the bulk save feature', 'err'); 
+      return;
+  }
+
   if (!canEditRecord(records[ri])) {
     showToast('This record is assigned to another user — you cannot edit it', 'err'); return;
   }
