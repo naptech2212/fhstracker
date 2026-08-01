@@ -1217,6 +1217,11 @@ async function doLogin(){
   
   // Freeze the object immediately upon login
   currentUser = Object.freeze({ name: u, role: userMeta[u].role, label: userMeta[u].label });
+
+  // 🔒 Force a password change if this account is still on its seeded default
+  if (passwords[u] === DEFAULT_PASSWORDS[u]) {
+    localStorage.setItem('fct_force_pw_change', u);
+  }
   
   // Save session so it survives a page refresh
   localStorage.setItem('fct_session', JSON.stringify(currentUser));
@@ -1225,7 +1230,12 @@ async function doLogin(){
   document.getElementById('page-login').classList.remove('active');
   document.getElementById('page-app').classList.add('active');
   setupRoleUI();
-  showPanel('dashboard');
+  if (localStorage.getItem('fct_force_pw_change') === u) {
+    showToast('You are on a default password — please set a new one now.', 'warn');
+    showPanel('settings');
+  } else {
+    showPanel('dashboard');
+  }
 
   // Restart the database sync if it was killed during logout
   if (!firestoreSyncStarted) {
@@ -3186,6 +3196,27 @@ function renderSettings(){
   let html = '';
   const isSA = currentUser && currentUser.role === 'superadmin';
 
+  // Self-service: EVERY logged-in role can change their own password here.
+  html += `
+    <div class="pw-card" style="border-color:var(--accent);">
+      <div class="pw-card-header">
+        <div class="pw-avatar ${currentUser.role}">${currentUser.name.slice(0,2).toUpperCase()}</div>
+        <div><div class="pw-name">My Password</div><div class="pw-role">${currentUser.label}</div></div>
+      </div>
+      <div style="font-size:.72rem;color:var(--text-dim);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.06em">New Password</div>
+      <div class="pw-input-wrap">
+        <input type="password" id="pw-new-self" placeholder="Enter new password…">
+        <button class="pw-eye" onclick="togglePwEye('pw-new-self',this)">👁</button>
+      </div>
+      <div style="font-size:.72rem;color:var(--text-dim);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.06em">Confirm Password</div>
+      <div class="pw-input-wrap">
+        <input type="password" id="pw-con-self" placeholder="Repeat new password…">
+        <button class="pw-eye" onclick="togglePwEye('pw-con-self',this)">👁</button>
+      </div>
+      <button class="btn-pw-save" onclick="changeMyOwnPassword()">Update My Password</button>
+    </div>
+  `;
+
   // Only render Admin tools if the user is a superadmin
   if (isSA) {
     const users = Object.keys(userMeta);
@@ -3432,6 +3463,24 @@ function togglePwEye(id, btn){
   else{inp.type='password';btn.textContent='👁';}
 }
 
+async function changeMyOwnPassword(){
+  if (!currentUser) return;
+  const np = document.getElementById('pw-new-self').value;
+  const cp = document.getElementById('pw-con-self').value;
+  if(!np){ showToast('Please enter a new password','err'); return; }
+  if(np.length < 4){ showToast('Password must be at least 4 characters','err'); return; }
+  if(np!==cp){ showToast('Passwords do not match','err'); return; }
+  passwords[currentUser.name] = await hashPassword(np);
+  addAudit('Changed own password');
+  save();
+  document.getElementById('pw-new-self').value='';
+  document.getElementById('pw-con-self').value='';
+  if (localStorage.getItem('fct_force_pw_change') === currentUser.name) {
+    localStorage.removeItem('fct_force_pw_change');
+  }
+  showToast('Your password has been updated');
+}
+
 async function changePassword(username){
   if (!currentUser || currentUser.role !== 'superadmin') {
     showToast('Unauthorized. Super Admin access required.', 'err');
@@ -3447,6 +3496,9 @@ async function changePassword(username){
   save();
   document.getElementById(`pw-new-${username}`).value='';
   document.getElementById(`pw-con-${username}`).value='';
+  if (localStorage.getItem('fct_force_pw_change') === username) {
+    localStorage.removeItem('fct_force_pw_change');
+  }
 
   showToast(`Password updated for ${username}`);
 }
