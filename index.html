@@ -3451,10 +3451,22 @@ function getSummaryString(r) {
     else pending.push(item);
   }
 
+  const compUdp = completed.filter(i => i.depot === 'UDP').map(i => i.label);
+  const compMdp = completed.filter(i => i.depot === 'MDP').map(i => i.label);
+  const partUdp = partial.filter(i => i.depot === 'UDP').map(i => i.label);
+  const partMdp = partial.filter(i => i.depot === 'MDP').map(i => i.label);
+
   let txt = `Ref: ${r.ref}\nDescription: ${r.desc}\n\n`;
-  txt += `Completed: ${completed.length}\n  ${completed.map(i=>i.label).join(', ')}`;
-  txt += `\n\nPartial Completed: ${partial.length}\n  ${partial.map(i=>i.label).join(', ')}`;
-  txt += `\n\nPending: ${pending.length}\n  ${pending.map(i=>i.label).join(', ')}`;
+
+  txt += `Completed: ${completed.length}`;
+  if (compUdp.length > 0) txt += `\n  UDP: ${compUdp.join(', ')}`;
+  if (compMdp.length > 0) txt += `\n  MDP: ${compMdp.join(', ')}`;
+
+  txt += `\n\nPartial Completed: ${partial.length}`;
+  if (partUdp.length > 0) txt += `\n  UDP: ${partUdp.join(', ')}`;
+  if (partMdp.length > 0) txt += `\n  MDP: ${partMdp.join(', ')}`;
+
+  txt += `\n\nPending: ${pending.length}`;
   return txt;
 }
 
