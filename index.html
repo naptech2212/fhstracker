@@ -1207,26 +1207,16 @@ async function doLogin(){
   }
   
   // Freeze the object immediately upon login
-currentUser = Object.freeze({ name: u, role: userMeta[u].role, label: userMeta[u].label });
-
-// 🔒 Force a password change if this account is still on its seeded default
-if (passwords[u] === DEFAULT_PASSWORDS[u]) {
-    localStorage.setItem('fct_force_pw_change', u);
-}
+  currentUser = Object.freeze({ name: u, role: userMeta[u].role, label: userMeta[u].label });
   
   // Save session so it survives a page refresh
   localStorage.setItem('fct_session', JSON.stringify(currentUser));
   
   addAudit('Signed in');
-document.getElementById('page-login').classList.remove('active');
-document.getElementById('page-app').classList.add('active');
-setupRoleUI();
-if (localStorage.getItem('fct_force_pw_change') === u) {
-    showToast('You are on a default password — please set a new one now.', 'warn');
-    showPanel('settings');   // adjust to whatever your Settings panel id is
-} else {
-    showPanel('dashboard');
-}
+  document.getElementById('page-login').classList.remove('active');
+  document.getElementById('page-app').classList.add('active');
+  setupRoleUI();
+  showPanel('dashboard');
 
   // Restart the database sync if it was killed during logout
   if (!firestoreSyncStarted) {
@@ -3443,10 +3433,7 @@ async function changePassword(username){
   if(!np){ showToast('Please enter a new password','err'); return; }
   if(np.length < 4){ showToast('Password must be at least 4 characters','err'); return; }
   if(np!==cp){ showToast('Passwords do not match','err'); return; }
-passwords[username] = await hashPassword(np);
-if (localStorage.getItem('fct_force_pw_change') === username) {
-    localStorage.removeItem('fct_force_pw_change');
-}
+  passwords[username] = await hashPassword(np);
   addAudit(`Password changed for user: ${username}`);
   save();
   document.getElementById(`pw-new-${username}`).value='';
