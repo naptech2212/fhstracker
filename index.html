@@ -501,6 +501,8 @@
   box-shadow: -15px 0 50px rgba(0,0,0,0.6); z-index: 1000;
   transition: right 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
   display: flex; flex-direction: column;
+  /* Creates an outer breathing room gap so scrollbars don't touch */
+  padding-right: 15px;
 }
 .quick-edit-drawer.open { right: 0; }
 .qe-header {
