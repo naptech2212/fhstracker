@@ -1199,11 +1199,20 @@ async function doLogin(){
   const u = document.getElementById('login-user').value.trim().toLowerCase();
   const p = document.getElementById('login-pass').value;
   const hashedInput = await hashPassword(p);
-  
-  // Accept either the hashed password (secure) or the plain-text (fallback for legacy local databases)
-  if(!userMeta[u] || (passwords[u] !== hashedInput && passwords[u] !== p)){ 
+  const stored = userMeta[u] ? passwords[u] : undefined;
+
+  // Only accept a raw match when the stored value is NOT already a SHA-256 hash
+  // (i.e. a genuinely legacy plaintext entry). This closes the bypass where
+  // typing an already-hashed value into the password field would log in.
+  const isLegacyPlaintextMatch = stored !== undefined && stored.length !== 64 && stored === p;
+
+  if(!userMeta[u] || !(stored === hashedInput || isLegacyPlaintextMatch)){ 
     showToast('Invalid credentials','err'); 
     return; 
+  }
+  if (isLegacyPlaintextMatch) {
+    passwords[u] = hashedInput; // migrate legacy plaintext password to a hash immediately
+    save();
   }
   
   // Freeze the object immediately upon login
