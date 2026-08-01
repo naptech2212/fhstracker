@@ -1703,6 +1703,10 @@ document.getElementById('edit-modal').addEventListener('click', function(e){
 //  SUPER ADMIN — SAVE RECORD-LEVEL REMARK
 // ════════════════════════════════════════════════
 function saveRecordRemark(ri){
+  if (!currentUser || currentUser.role !== 'superadmin') {
+    showToast('Unauthorized. Super Admin access required.', 'err');
+    return;
+  }
   const rec = records[ri];
   const val = document.getElementById(`rec-rmk-${ri}`).value.trim();
   rec.remark = val;
@@ -3318,6 +3322,11 @@ function downloadBackup() {
 }
   
 function restoreBackup(event) {
+  if (!currentUser || currentUser.role !== 'superadmin') {
+    showToast('Unauthorized. Super Admin access required.', 'err');
+    if (event && event.target) event.target.value = '';
+    return;
+  }
   const file = event.target.files[0];
   if (!file) return;
 
@@ -3448,6 +3457,10 @@ function renderAudit(){
 }
 
 function clearAuditLog() {
+  if (!currentUser || currentUser.role !== 'superadmin') {
+    showToast('Unauthorized. Super Admin access required.', 'err');
+    return;
+  }
   if(!confirm("Are you sure you want to permanently clear the audit log? This cannot be undone.")) return;
   auditLog = []; 
   addAudit('Cleared the entire audit log');
