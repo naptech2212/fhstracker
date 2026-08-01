@@ -948,7 +948,20 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 
-const DEFAULT_PASSWORDS = { superadmin:'admin123', admin:'admin123', viewer:'viewer123' };
+const DEFAULT_PASSWORDS = { 
+  superadmin:'240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 
+  admin:'240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 
+  viewer:'1b22e1dce0a80e144a2c5eaec2a048a14de81180fb78564f1db1f3bd4f4693a1' 
+};
+
+// Secure Client-Side Hashing Utility
+async function hashPassword(password) {
+  const msgBuffer = new TextEncoder().encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 const DEFAULT_USERS = {
   superadmin: { role:'superadmin', label:'Super Admin' },
   admin:      { role:'admin',      label:'Admin' },
@@ -963,7 +976,8 @@ try {
   const stored = localStorage.getItem('fct_session');
   if (stored) {
     const parsed = JSON.parse(stored);
-    if (typeof parsed === 'object') currentUser = parsed;
+    // Object.freeze prevents the console from modifying the role property
+    if (typeof parsed === 'object') currentUser = Object.freeze(parsed);
   }
 } catch (e) {
   localStorage.removeItem('fct_session');
@@ -1085,7 +1099,16 @@ function save(){
     console.warn("Save blocked — DB not ready yet.");
     return;
   }
-   // ✅ Never overwrite existing data with empty records
+  
+  // 🛡️ INTEGRITY GUARD: Prevent accidental massive data wipes
+  if (!userMeta || Object.keys(userMeta).length === 0 || !passwords || Object.keys(passwords).length === 0) {
+    showToast("Critical Error: User data is corrupted. Save aborted to prevent data wipe.", "err");
+    return;
+  }
+  if (!Array.isArray(records)) {
+    showToast("Critical Error: Records array is corrupted. Save aborted.", "err");
+    return;
+  }
   if (records.length === 0 && lastKnownTimestamp) {
     console.warn("Save blocked — records empty but DB had data previously.");
     return;
@@ -1166,7 +1189,7 @@ function toggleChips(id, btn) {
 // ════════════════════════════════════════════════
 //  AUTH
 // ════════════════════════════════════════════════
-function doLogin(){
+async function doLogin(){
   // 1. NEW: Block login until Firebase has finished fetching the real passwords
   if (!dbReady) {
     showToast('Connecting to secure server... Please wait a second and try again.', 'warn');
@@ -1175,9 +1198,16 @@ function doLogin(){
 
   const u = document.getElementById('login-user').value.trim().toLowerCase();
   const p = document.getElementById('login-pass').value;
+  const hashedInput = await hashPassword(p);
   
-  if(!userMeta[u] || passwords[u] !== p){ showToast('Invalid credentials','err'); return; }
-  currentUser = { name: u, role: userMeta[u].role, label: userMeta[u].label };
+  // Accept either the hashed password (secure) or the plain-text (fallback for legacy local databases)
+  if(!userMeta[u] || (passwords[u] !== hashedInput && passwords[u] !== p)){ 
+    showToast('Invalid credentials','err'); 
+    return; 
+  }
+  
+  // Freeze the object immediately upon login
+  currentUser = Object.freeze({ name: u, role: userMeta[u].role, label: userMeta[u].label });
   
   // Save session so it survives a page refresh
   localStorage.setItem('fct_session', JSON.stringify(currentUser));
@@ -1523,6 +1553,10 @@ function adjustTS(delta){
 }
 
 function saveRecord(){
+  if (!currentUser || currentUser.role !== 'superadmin') {
+    showToast('Unauthorized. Super Admin access required.', 'err');
+    return;
+  }
   const type = document.getElementById('f-type').value;
   const ref  = document.getElementById('f-ref').value.trim();
   const desc = document.getElementById('f-desc').value.trim();
@@ -1602,6 +1636,10 @@ function adjustEditTS(delta){
 }
 
 function saveEditRecord(){
+  if (!currentUser || currentUser.role !== 'superadmin') {
+    showToast('Unauthorized. Super Admin access required.', 'err');
+    return;
+  }
   if(editIndex < 0) return;
   const type   = document.getElementById('e-type').value;
   const ref    = document.getElementById('e-ref').value.trim();
@@ -1643,6 +1681,10 @@ function saveEditRecord(){
 }
   
 function deleteRecord(ri){
+  if (!currentUser || currentUser.role !== 'superadmin') {
+    showToast('Unauthorized. Super Admin access required.', 'err');
+    return;
+  }
   const rec = records[ri];
   if(!confirm(`Delete record "${rec.ref}"? This cannot be undone.`)) return;
   addAudit(`Deleted record: ${rec.ref} (${rec.type})`);
@@ -3319,7 +3361,11 @@ function restoreBackup(event) {
   event.target.value = ''; // Reset input so the same file can be selected again if needed
 }  
     
-function addNewUser() {
+async function addNewUser() {
+  if (!currentUser || currentUser.role !== 'superadmin') {
+    showToast('Unauthorized. Super Admin access required.', 'err');
+    return;
+  }
   const u = document.getElementById('new-u-name').value.trim().toLowerCase();
   const r = document.getElementById('new-u-role').value;
   const p = document.getElementById('new-u-pass').value;
@@ -3330,7 +3376,7 @@ function addNewUser() {
   if(/[^a-z0-9]/.test(u)) { showToast('Username must be alphanumeric and lowercase', 'err'); return; }
 
   userMeta[u] = { role: r, label: r === 'admin' ? 'Admin' : 'Viewer' };
-  passwords[u] = p;
+  passwords[u] = await hashPassword(p);
   
   addAudit(`Created new user: ${u} (${r})`);
   save();
@@ -3339,6 +3385,10 @@ function addNewUser() {
 }
 
 function deleteUser(username) {
+  if (!currentUser || currentUser.role !== 'superadmin') {
+    showToast('Unauthorized. Super Admin access required.', 'err');
+    return;
+  }
   if (username === currentUser.name) {
     showToast('You cannot delete your own active account.', 'err');
     return;
@@ -3364,13 +3414,17 @@ function togglePwEye(id, btn){
   else{inp.type='password';btn.textContent='👁';}
 }
 
-function changePassword(username){
+async function changePassword(username){
+  if (!currentUser || currentUser.role !== 'superadmin') {
+    showToast('Unauthorized. Super Admin access required.', 'err');
+    return;
+  }
   const np=document.getElementById(`pw-new-${username}`).value;
   const cp=document.getElementById(`pw-con-${username}`).value;
   if(!np){ showToast('Please enter a new password','err'); return; }
   if(np.length < 4){ showToast('Password must be at least 4 characters','err'); return; }
   if(np!==cp){ showToast('Passwords do not match','err'); return; }
-  passwords[username]=np;
+  passwords[username] = await hashPassword(np);
   addAudit(`Password changed for user: ${username}`);
   save();
   document.getElementById(`pw-new-${username}`).value='';
