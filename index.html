@@ -498,7 +498,7 @@
 .quick-edit-drawer {
   position: fixed; top: 0; right: -600px; width: 100%; max-width: 570px; height: 100vh;
   background: var(--bg-card); border-left: 1px solid var(--border);
-  box-shadow: -15px 0 50px rgba(0,0,0,0.6); z-index: 1000;
+  box-shadow: none; z-index: 1000;
   transition: right 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
   display: flex; flex-direction: column;
   /* Creates an outer breathing room gap so scrollbars don't touch */
@@ -525,7 +525,6 @@
   .quick-edit-drawer { 
     max-width: 100% !important; 
     right: -120%;
-    box-shadow: none;
   }
   .quick-edit-drawer.open { right: 0; }
   .qe-content { padding: 1rem; padding-bottom: 5rem; }
